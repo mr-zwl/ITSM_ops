@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/backend.Dockerfile
+    image: itsm-ops/backend:local
+    container_name: itsm-ops-backend
+    environment:
+      APP_ENV: development
+      APP_PORT: "8080"
+      APP_LOG_LEVEL: info
+      JWT_SECRET: please-change-me
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/frontend.Dockerfile
+    image: itsm-ops/frontend:local
+    container_name: itsm-ops-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/collector.Dockerfile
+    image: itsm-ops/collector:local
+    container_name: itsm-ops-collector
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      COLLECTOR_ENDPOINT: http://backend:8080/api/v1/collect
+      COLLECTOR_INTERVAL: "60"
+      COLLECTOR_MODE: mock
+    restart: unless-stopped

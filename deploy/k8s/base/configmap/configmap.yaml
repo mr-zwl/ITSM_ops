@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: itsm-config
+data:
+  APP_ENV: production
+  APP_PORT: "8080"
+  APP_LOG_LEVEL: info
+  DB_TYPE: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_NAME: itsm_ops

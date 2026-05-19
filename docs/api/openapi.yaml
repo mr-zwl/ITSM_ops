@@ -1,0 +1,418 @@
+openapi: 3.0.3
+info:
+  title: ITSM Ops API
+  description: Web 运维智能监控一体化平台 API
+  version: 0.1.0
+  contact:
+    name: ITSM Ops Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: system
+  - name: auth
+  - name: assets
+  - name: metrics
+  - name: alerts
+  - name: notifications
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Response:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: integer
+        asset_type_id:
+          type: integer
+        name:
+          type: string
+        ip:
+          type: string
+        sn:
+          type: string
+        manufacturer:
+          type: string
+        model:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [online, offline, maintenance]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    AssetType:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+
+    MetricDefinition:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        data_type:
+          type: string
+
+    MetricData:
+      type: object
+      properties:
+        id:
+          type: integer
+        asset_id:
+          type: integer
+        metric_code:
+          type: string
+        value:
+          type: number
+        collected_at:
+          type: string
+
+    MetricPoint:
+      type: object
+      required: [asset_id, metric_code, value]
+      properties:
+        asset_id:
+          type: integer
+        metric_code:
+          type: string
+        value:
+          type: number
+        collected_at:
+          type: string
+
+    AlertRule:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        metric_code:
+          type: string
+        condition_op:
+          type: string
+        threshold:
+          type: number
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        enabled:
+          type: integer
+
+    AlertEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        rule_id:
+          type: integer
+        asset_id:
+          type: integer
+        severity:
+          type: string
+        message:
+          type: string
+        current_val:
+          type: number
+        status:
+          type: string
+          enum: [firing, acked, resolved]
+        fired_at:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        display_name:
+          type: string
+        email:
+          type: string
+        status:
+          type: integer
+
+security:
+  - bearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+
+  /readyz:
+    get:
+      tags: [system]
+      summary: Readiness check
+      security: []
+      responses:
+        "200":
+          description: Ready
+
+  /api/v1/system/info:
+    get:
+      tags: [system]
+      summary: System information
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+        "401":
+          description: Invalid credentials
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current user info
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/assets:
+    get:
+      tags: [assets]
+      summary: List assets
+      responses:
+        "200":
+          description: OK
+    post:
+      tags: [assets]
+      summary: Create asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asset_type_id, name]
+              properties:
+                asset_type_id:
+                  type: integer
+                name:
+                  type: string
+                ip:
+                  type: string
+                sn:
+                  type: string
+                manufacturer:
+                  type: string
+                model:
+                  type: string
+                location:
+                  type: string
+                status:
+                  type: string
+      responses:
+        "201":
+          description: Created
+
+  /api/v1/assets/{id}:
+    get:
+      tags: [assets]
+      summary: Get asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+    put:
+      tags: [assets]
+      summary: Update asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+    delete:
+      tags: [assets]
+      summary: Delete asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+
+  /api/v1/asset-types:
+    get:
+      tags: [assets]
+      summary: List asset types
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/metrics:
+    get:
+      tags: [metrics]
+      summary: List metric definitions
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/collect:
+    post:
+      tags: [metrics]
+      summary: Ingest metric data points
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [points]
+              properties:
+                points:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/MetricPoint"
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/metric-data:
+    get:
+      tags: [metrics]
+      summary: Query metric data
+      parameters:
+        - name: asset_id
+          in: query
+          schema:
+            type: integer
+        - name: metric_code
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/alert-rules:
+    get:
+      tags: [alerts]
+      summary: List alert rules
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/alert-events:
+    get:
+      tags: [alerts]
+      summary: List alert events
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [firing, acked, resolved]
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/alert-events/{id}/ack:
+    post:
+      tags: [alerts]
+      summary: Acknowledge alert event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Acknowledged
+
+  /api/v1/notify-channels:
+    get:
+      tags: [notifications]
+      summary: List notification channels
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/notify-records:
+    get:
+      tags: [notifications]
+      summary: List notification records
+      responses:
+        "200":
+          description: OK

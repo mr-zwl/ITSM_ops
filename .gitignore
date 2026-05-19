@@ -1,0 +1,78 @@
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# 构建产物
+bin/
+dist/
+build/
+out/
+target/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+*.test
+*.out
+coverage.txt
+
+# TypeScript 构建缓存
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# SQLite 数据库
+*.db
+*.db-journal
+*.db-wal
+
+# Node.js / 前端
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.parcel-cache/
+.vite/
+
+# 环境配置（敏感信息）
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# 日志
+logs/
+*.log
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 测试覆盖率
+coverage/
+*.lcov
+
+# Docker / K8s 本地数据
+data/
+volumes/
+
+# Helm
+deploy/k8s/charts/**/charts/*.tgz
+
+# 操作系统
+Thumbs.db
+ehthumbs.db
+Desktop.ini
