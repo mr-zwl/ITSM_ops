@@ -1,0 +1,49 @@
+---
+- name: Create application group
+  group:
+    name: "{{ app_group }}"
+    state: present
+
+- name: Create application user
+  user:
+    name: "{{ app_user }}"
+    group: "{{ app_group }}"
+    shell: /sbin/nologin
+    create_home: false
+    system: true
+
+- name: Create application directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  loop:
+    - "{{ app_base_dir }}"
+    - "{{ app_base_dir }}/bin"
+    - "{{ app_base_dir }}/conf"
+    - "{{ app_base_dir }}/data"
+    - "{{ app_base_dir }}/logs"
+    - "{{ app_base_dir }}/migrations"
+    - "{{ app_base_dir }}/web"
+
+- name: Install common packages
+  apt:
+    name:
+      - sqlite3
+      - wget
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install common packages (RHEL)
+  yum:
+    name:
+      - sqlite
+      - wget
+      - curl
+    state: present
+  when: ansible_os_family == "RedHat"

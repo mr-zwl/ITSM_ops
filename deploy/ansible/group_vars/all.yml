@@ -1,0 +1,45 @@
+---
+# ============================================================
+# ITSM_ops 全局部署变量
+# 部署工程师按需修改以下配置项
+# ============================================================
+
+# --- 应用基本配置 ---
+app_name: itsm-ops
+app_user: itsm
+app_group: itsm
+app_base_dir: /opt/itsm-ops
+
+# --- 后端配置 ---
+backend_port: 8080
+backend_log_level: info
+
+# --- 数据库 ---
+db_type: mysql
+db_host: 127.0.0.1
+db_port: 3306
+db_name: itsm_ops
+db_user: itsm
+db_password: "changeme"
+
+# --- JWT ---
+jwt_secret: "please-change-me-to-a-long-random-string"
+jwt_expire: "24h"
+
+# --- 前端 ---
+frontend_domain: itsm.example.com
+frontend_port: 80
+frontend_ssl: false
+# frontend_ssl_cert: /etc/nginx/ssl/itsm.crt
+# frontend_ssl_key: /etc/nginx/ssl/itsm.key
+
+# --- 采集器 ---
+collector_interval: 60
+collector_mode: auto
+collector_token: "changeme"
+
+# --- 二进制包来源 ---
+# 本地编译好的二进制路径，或远程 URL
+binary_src_dir: "{{ playbook_dir }}/../../dist"
+# 如果使用远程下载
+# binary_base_url: https://releases.example.com/itsm-ops/v0.1.0

@@ -1,0 +1,24 @@
+---
+- name: Deploy ITSM_ops - Common Setup
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Deploy ITSM_ops - Backend
+  hosts: backend
+  become: true
+  roles:
+    - backend
+
+- name: Deploy ITSM_ops - Frontend
+  hosts: frontend
+  become: true
+  roles:
+    - frontend
+
+- name: Deploy ITSM_ops - Collector
+  hosts: collector
+  become: true
+  roles:
+    - collector

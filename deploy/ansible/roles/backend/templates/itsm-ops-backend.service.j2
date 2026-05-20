@@ -1,0 +1,19 @@
+[Unit]
+Description=ITSM Ops Backend API Server
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+Group={{ app_group }}
+EnvironmentFile={{ app_base_dir }}/conf/backend.env
+ExecStart={{ app_base_dir }}/bin/itsm-ops-backend
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+StandardOutput=append:{{ app_base_dir }}/logs/backend.log
+StandardError=append:{{ app_base_dir }}/logs/backend-error.log
+
+[Install]
+WantedBy=multi-user.target

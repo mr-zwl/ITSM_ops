@@ -1,0 +1,33 @@
+---
+- name: Copy collector binary
+  copy:
+    src: "{{ binary_src_dir }}/itsm-collector"
+    dest: "{{ app_base_dir }}/bin/itsm-collector"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  notify: restart collector
+
+- name: Deploy collector environment file
+  template:
+    src: collector.env.j2
+    dest: "{{ app_base_dir }}/conf/collector.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0600"
+  notify: restart collector
+
+- name: Deploy collector systemd unit
+  template:
+    src: itsm-ops-collector.service.j2
+    dest: /etc/systemd/system/itsm-ops-collector.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart collector
+
+- name: Enable and start collector
+  systemd:
+    name: itsm-ops-collector
+    enabled: true
+    state: started

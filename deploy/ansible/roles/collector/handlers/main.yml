@@ -1,0 +1,9 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: restart collector
+  systemd:
+    name: itsm-ops-collector
+    state: restarted

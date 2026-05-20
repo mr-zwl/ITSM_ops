@@ -1,0 +1,61 @@
+---
+- name: Install nginx
+  apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install nginx (RHEL)
+  yum:
+    name: nginx
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Copy frontend dist files
+  copy:
+    src: "{{ binary_src_dir }}/frontend-dist/"
+    dest: "{{ app_base_dir }}/web/"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0644"
+    directory_mode: "0755"
+  notify: reload nginx
+
+- name: Deploy nginx config
+  template:
+    src: itsm-ops.conf.j2
+    dest: /etc/nginx/sites-available/itsm-ops.conf
+    mode: "0644"
+  notify: reload nginx
+  when: ansible_os_family == "Debian"
+
+- name: Deploy nginx config (RHEL)
+  template:
+    src: itsm-ops.conf.j2
+    dest: /etc/nginx/conf.d/itsm-ops.conf
+    mode: "0644"
+  notify: reload nginx
+  when: ansible_os_family == "RedHat"
+
+- name: Enable nginx site (Debian)
+  file:
+    src: /etc/nginx/sites-available/itsm-ops.conf
+    dest: /etc/nginx/sites-enabled/itsm-ops.conf
+    state: link
+  notify: reload nginx
+  when: ansible_os_family == "Debian"
+
+- name: Remove default nginx site (Debian)
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx
+  when: ansible_os_family == "Debian"
+
+- name: Enable and start nginx
+  systemd:
+    name: nginx
+    enabled: true
+    state: started

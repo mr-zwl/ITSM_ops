@@ -1,0 +1,18 @@
+[Unit]
+Description=ITSM Ops Metrics Collector
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+Group={{ app_group }}
+EnvironmentFile={{ app_base_dir }}/conf/collector.env
+ExecStart={{ app_base_dir }}/bin/itsm-collector
+Restart=always
+RestartSec=10
+
+StandardOutput=append:{{ app_base_dir }}/logs/collector.log
+StandardError=append:{{ app_base_dir }}/logs/collector-error.log
+
+[Install]
+WantedBy=multi-user.target

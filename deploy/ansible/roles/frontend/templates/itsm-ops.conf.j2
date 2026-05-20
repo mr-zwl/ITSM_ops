@@ -1,0 +1,44 @@
+server {
+{% if frontend_ssl %}
+    listen 443 ssl;
+    ssl_certificate     {{ frontend_ssl_cert }};
+    ssl_certificate_key {{ frontend_ssl_key }};
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+{% else %}
+    listen {{ frontend_port }};
+{% endif %}
+    server_name {{ frontend_domain }};
+
+    root {{ app_base_dir }}/web;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://{{ hostvars[groups['backend'][0]]['ansible_host'] | default(groups['backend'][0]) }}:{{ backend_port }}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /healthz {
+        proxy_pass http://{{ hostvars[groups['backend'][0]]['ansible_host'] | default(groups['backend'][0]) }}:{{ backend_port }}/healthz;
+    }
+
+    location /readyz {
+        proxy_pass http://{{ hostvars[groups['backend'][0]]['ansible_host'] | default(groups['backend'][0]) }}:{{ backend_port }}/readyz;
+    }
+}
+
+{% if frontend_ssl %}
+server {
+    listen 80;
+    server_name {{ frontend_domain }};
+    return 301 https://$host$request_uri;
+}
+{% endif %}

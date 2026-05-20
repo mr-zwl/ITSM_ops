@@ -1,0 +1,91 @@
+---
+- name: Copy backend binary
+  copy:
+    src: "{{ binary_src_dir }}/itsm-ops-backend"
+    dest: "{{ app_base_dir }}/bin/itsm-ops-backend"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  notify: restart backend
+
+- name: Copy seed tool
+  copy:
+    src: "{{ binary_src_dir }}/itsm-seed"
+    dest: "{{ app_base_dir }}/bin/itsm-seed"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+
+- name: Copy migration files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ app_base_dir }}/migrations/"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0644"
+  with_fileglob:
+    - "{{ playbook_dir }}/../../backend/migrations/*.sql"
+
+- name: Deploy backend environment file
+  template:
+    src: backend.env.j2
+    dest: "{{ app_base_dir }}/conf/backend.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0600"
+  notify: restart backend
+
+- name: Run database migrations (SQLite)
+  shell: |
+    for f in {{ app_base_dir }}/migrations/*_sqlite.sql; do
+      sqlite3 {{ app_base_dir }}/data/itsm.db < "$f"
+    done
+  args:
+    creates: "{{ app_base_dir }}/data/itsm.db"
+  when: db_type == "sqlite3"
+
+- name: Seed admin user (SQLite)
+  shell: |
+    {{ app_base_dir }}/bin/itsm-seed | sqlite3 {{ app_base_dir }}/data/itsm.db
+  args:
+    creates: "{{ app_base_dir }}/data/.seeded"
+  when: db_type == "sqlite3"
+  register: seed_result
+
+- name: Mark seeded
+  file:
+    path: "{{ app_base_dir }}/data/.seeded"
+    state: touch
+    owner: "{{ app_user }}"
+  when: seed_result is changed
+
+- name: Run database migrations (MySQL)
+  shell: |
+    mysql -h {{ db_host }} -P {{ db_port }} -u {{ db_user }} -p'{{ db_password }}' {{ db_name }} < {{ app_base_dir }}/migrations/001_init.sql
+  args:
+    creates: "{{ app_base_dir }}/data/.migrated"
+  when: db_type == "mysql"
+
+- name: Deploy backend systemd unit
+  template:
+    src: itsm-ops-backend.service.j2
+    dest: /etc/systemd/system/itsm-ops-backend.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart backend
+
+- name: Enable and start backend
+  systemd:
+    name: itsm-ops-backend
+    enabled: true
+    state: started
+
+- name: Wait for backend health
+  uri:
+    url: "http://127.0.0.1:{{ backend_port }}/healthz"
+    status_code: 200
+  retries: 10
+  delay: 3
+  register: health
+  until: health.status == 200
