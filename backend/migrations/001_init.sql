@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS assets (
     model         VARCHAR(128) NOT NULL DEFAULT '',
     location      VARCHAR(255) NOT NULL DEFAULT '',
     status        VARCHAR(16)  NOT NULL DEFAULT 'online',
-    tags          JSON,
-    extra         JSON,
+    tags          JSON NOT NULL DEFAULT (JSON_ARRAY()),
+    extra         JSON NOT NULL DEFAULT (JSON_OBJECT()),
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (asset_type_id) REFERENCES asset_types(id),
@@ -164,4 +164,15 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_user (user_id),
     INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS metric_data (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    asset_id     BIGINT UNSIGNED NOT NULL,
+    metric_code  VARCHAR(64) NOT NULL,
+    value        DOUBLE NOT NULL DEFAULT 0,
+    collected_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_asset_metric (asset_id, metric_code),
+    INDEX idx_collected (collected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -79,8 +79,8 @@ func (r *Repository) GetAsset(ctx context.Context, id uint64) (*Asset, error) {
 
 func (r *Repository) CreateAsset(ctx context.Context, in CreateAssetInput) (uint64, error) {
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO assets (asset_type_id, name, ip, sn, manufacturer, model, location, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO assets (asset_type_id, name, ip, sn, manufacturer, model, location, status, tags, extra)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}')`,
 		in.AssetTypeID, in.Name, in.IP, in.SN, in.Manufacturer, in.Model, in.Location, in.Status)
 	if err != nil {
 		return 0, err

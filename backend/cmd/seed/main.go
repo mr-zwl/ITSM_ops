@@ -17,5 +17,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("INSERT OR IGNORE INTO users (username, password, display_name, status) VALUES ('admin', '%s', '系统管理员', 1);\n", hashed)
+	fmt.Printf("INSERT IGNORE INTO users (username, password, display_name, status) VALUES ('admin', '%s', '系统管理员', 1);\n", hashed)
 }
