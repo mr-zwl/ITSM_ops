@@ -246,7 +246,7 @@ onMounted(() => {
                 资产类型 <span class="required">*</span>
               </label>
               <select v-model="formData.asset_type_id" class="form-input form-select" :disabled="formLoading">
-                <option value="" disabled>请选择类型</option>
+                <option :value="0" disabled>请选择类型</option>
                 <option v-for="at in assetTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
                 <option value="服务器">服务器</option>
                 <option value="交换机">交换机</option>
