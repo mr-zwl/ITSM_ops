@@ -71,6 +71,7 @@ func getDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var mRows []metricRow
+	resp.Metrics = []LatestMetric{}
 	if err := db.SelectContext(r.Context(), &mRows, `
 		SELECT a.id as asset_id, a.name as asset_name, a.ip as asset_ip,
 			cpu.val as cpu_usage, mem.val as mem_usage, disk.val as disk_usage
@@ -80,8 +81,6 @@ func getDashboard(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN (SELECT md.asset_id, md.value as val FROM metric_data md INNER JOIN (SELECT asset_id, MAX(id) as max_id FROM metric_data WHERE metric_code='disk_usage' GROUP BY asset_id) t ON md.id = t.max_id) disk ON a.id = disk.asset_id
 		ORDER BY a.id
 	`); err == nil {
-		for _, mr := range mRows {
-			resp.Metrics = []LatestMetric{}
 		for _, mr := range mRows {
 			resp.Metrics = append(resp.Metrics, LatestMetric{
 				AssetID:   mr.AssetID,
@@ -94,9 +93,8 @@ func getDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := db.SelectContext(r.Context(), &resp.RecentAlerts, "SELECT id, asset_id, severity, message, current_val, status, fired_at FROM alert_events ORDER BY fired_at DESC LIMIT 20"); err != nil {
-		resp.RecentAlerts = []RecentAlert{}
-	}
+	resp.RecentAlerts = []RecentAlert{}
+	_ = db.SelectContext(r.Context(), &resp.RecentAlerts, "SELECT id, asset_id, severity, message, current_val, status, fired_at FROM alert_events ORDER BY fired_at DESC LIMIT 20")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"code": 0, "data": resp, "message": "ok"})
