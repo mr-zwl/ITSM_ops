@@ -77,7 +77,7 @@ func listEvents(w http.ResponseWriter, r *http.Request) {
 func ackEvent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, err := db.ExecContext(r.Context(),
-		"UPDATE alert_events SET status='acked', acked_at=datetime('now') WHERE id=? AND status='firing'", id)
+		"UPDATE alert_events SET status='acked', acked_at=NOW() WHERE id=? AND status='firing'", id)
 	if err != nil {
 		respondErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -98,11 +98,13 @@ func Evaluate(database *sqlx.DB) {
 			Value   float64 `db:"value"`
 		}
 		query := `SELECT asset_id, value FROM metric_data
-			WHERE metric_code=? AND collected_at > datetime('now', '-2 minutes')
+			WHERE metric_code=? AND collected_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
 			ORDER BY collected_at DESC`
 		if err := database.Select(&rows, query, rule.MetricCode); err != nil {
+			slog.Error("alert eval: query metric_data", "rule", rule.Name, "error", err)
 			continue
 		}
+		slog.Info("alert eval: checked rule", "rule", rule.Name, "metric", rule.MetricCode, "rows", len(rows), "op", rule.ConditionOp, "threshold", rule.Threshold)
 
 		seen := map[uint64]bool{}
 		for _, row := range rows {
@@ -111,6 +113,7 @@ func Evaluate(database *sqlx.DB) {
 			}
 			seen[row.AssetID] = true
 
+			slog.Info("alert eval: comparing", "asset_id", row.AssetID, "value", row.Value, "op", rule.ConditionOp, "threshold", rule.Threshold)
 			triggered := false
 			switch rule.ConditionOp {
 			case ">":
@@ -126,12 +129,14 @@ func Evaluate(database *sqlx.DB) {
 			if !triggered {
 				continue
 			}
+			slog.Warn("alert eval: threshold triggered", "rule", rule.Name, "asset_id", row.AssetID, "value", row.Value, "threshold", rule.Threshold)
 
 			var existing int
 			database.Get(&existing,
 				"SELECT COUNT(*) FROM alert_events WHERE rule_id=? AND asset_id=? AND status='firing'",
 				rule.ID, row.AssetID)
 			if existing > 0 {
+				slog.Info("alert eval: already firing, skip", "rule_id", rule.ID, "asset_id", row.AssetID)
 				continue
 			}
 

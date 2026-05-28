@@ -119,7 +119,7 @@ func (r *Repository) UpdateAsset(ctx context.Context, id uint64, in UpdateAssetI
 		a.Status = *in.Status
 	}
 	_, err = r.db.ExecContext(ctx,
-		`UPDATE assets SET name=?, ip=?, sn=?, manufacturer=?, model=?, location=?, status=?, updated_at=datetime('now') WHERE id=?`,
+		`UPDATE assets SET name=?, ip=?, sn=?, manufacturer=?, model=?, location=?, status=?, updated_at=NOW() WHERE id=?`,
 		a.Name, a.IP, a.SN, a.Manufacturer, a.Model, a.Location, a.Status, id)
 	return err
 }

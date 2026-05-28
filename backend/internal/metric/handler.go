@@ -79,9 +79,9 @@ func ingest(w http.ResponseWriter, r *http.Request) {
 		}
 		ts := p.CollectedAt
 		if ts == "" {
-			ts = "datetime('now')"
+			ts = ""
 			_, err = tx.ExecContext(r.Context(),
-				"INSERT INTO metric_data (asset_id, metric_code, value, collected_at) VALUES (?, ?, ?, datetime('now'))",
+				"INSERT INTO metric_data (asset_id, metric_code, value, collected_at) VALUES (?, ?, ?, NOW())",
 				p.AssetID, p.MetricCode, p.Value)
 		} else {
 			_, err = tx.ExecContext(r.Context(),

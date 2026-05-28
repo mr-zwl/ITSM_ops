@@ -12,6 +12,7 @@ import (
 	"github.com/your-org/itsm_ops/backend/internal/asset"
 	"github.com/your-org/itsm_ops/backend/internal/auth"
 	"github.com/your-org/itsm_ops/backend/internal/config"
+	"github.com/your-org/itsm_ops/backend/internal/dashboard"
 	"github.com/your-org/itsm_ops/backend/internal/metric"
 	"github.com/your-org/itsm_ops/backend/internal/middleware"
 	"github.com/your-org/itsm_ops/backend/internal/notify"
@@ -42,6 +43,7 @@ func NewRouter(opts RouterOptions) http.Handler {
 	asset.RegisterRoutes(mux, asset.NewRepository(opts.DB))
 	metric.RegisterRoutes(mux, opts.DB)
 	alert.RegisterRoutes(mux, opts.DB)
+	dashboard.RegisterRoutes(mux, opts.DB)
 	notify.RegisterRoutes(mux, opts.DB)
 	topology.RegisterRoutes(mux)
 	report.RegisterRoutes(mux)

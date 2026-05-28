@@ -33,7 +33,8 @@ func main() {
 	interval := envInt("COLLECTOR_INTERVAL", 30)
 	mode := envStr("COLLECTOR_MODE", "auto")
 
-	fmt.Printf("collector starting: endpoint=%s asset_id=%d interval=%ds mode=%s\n", endpoint, assetID, interval, mode)
+	fmt.Printf("collector starting: endpoint=%s asset_id=%d interval=%ds mode=%s os=%s\n",
+		endpoint, assetID, interval, mode, runtime.GOOS)
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
@@ -57,10 +58,16 @@ func main() {
 func collect(endpoint, token string, assetID uint64, mode string) {
 	var points []MetricPoint
 
-	if mode == "mock" || runtime.GOOS != "linux" {
+	if mode == "mock" {
 		points = mockMetrics(assetID)
+	} else if runtime.GOOS == "windows" {
+		points = windowsMetrics(assetID)
 	} else {
 		points = realMetrics(assetID)
+	}
+
+	if len(points) == 0 {
+		return
 	}
 
 	payload := IngestPayload{Points: points}
@@ -85,6 +92,56 @@ func collect(endpoint, token string, assetID uint64, mode string) {
 
 	fmt.Printf("collected %d points -> %d\n", len(points), resp.StatusCode)
 }
+
+// ============ Windows Metrics ============
+
+func windowsMetrics(assetID uint64) []MetricPoint {
+	points := []MetricPoint{}
+
+	if cpu, err := getWindowsCPU(); err == nil {
+		points = append(points, MetricPoint{assetID, "cpu_usage", cpu})
+	}
+	if mem, err := getWindowsMem(); err == nil {
+		points = append(points, MetricPoint{assetID, "mem_usage", mem})
+	}
+	if disk, err := getWindowsDisk(); err == nil {
+		points = append(points, MetricPoint{assetID, "disk_usage", disk})
+	}
+
+	return points
+}
+
+func getWindowsCPU() (float64, error) {
+	// Use PowerShell: Get-Counter '\Processor(_Total)\% Processor Time'
+	out, err := exec.Command("powershell", "-NoProfile", "-Command",
+		`$c = Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction SilentlyContinue; if ($c) { [math]::Round($c.CounterSamples.CookedValue, 1) } else { 0 }`).Output()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+}
+
+func getWindowsMem() (float64, error) {
+	// Use PowerShell: calculate memory usage percentage
+	out, err := exec.Command("powershell", "-NoProfile", "-Command",
+		`$os = Get-CimInstance Win32_OperatingSystem; [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / $os.TotalVisibleMemorySize * 100, 1)`).Output()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+}
+
+func getWindowsDisk() (float64, error) {
+	// Use PowerShell: get system drive usage
+	out, err := exec.Command("powershell", "-NoProfile", "-Command",
+		`$d = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"; [math]::Round(($d.Size - $d.FreeSpace) / $d.Size * 100, 1)`).Output()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+}
+
+// ============ Linux Metrics ============
 
 func realMetrics(assetID uint64) []MetricPoint {
 	points := []MetricPoint{}

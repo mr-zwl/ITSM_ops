@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { get } from '@/api/http'
 
 interface StatCard {
   key: string
@@ -12,6 +13,15 @@ interface StatCard {
   trendValue: string
 }
 
+interface AssetMetric {
+  asset_id: number
+  asset_name: string
+  asset_ip: string
+  cpu_usage: number | null
+  mem_usage: number | null
+  disk_usage: number | null
+}
+
 interface AlertItem {
   id: number
   level: 'critical' | 'warning' | 'info'
@@ -22,6 +32,7 @@ interface AlertItem {
 
 const currentTime = ref('')
 const uptimeSeconds = ref(0)
+const loading = ref(true)
 let timer: ReturnType<typeof setInterval> | undefined
 
 function formatTime(): string {
@@ -44,74 +55,140 @@ function formatUptime(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+const stats = ref<StatCard[]>([])
+
+const assetMetrics = ref<AssetMetric[]>([])
+
+const alerts = ref<AlertItem[]>([])
+
+const alertLevelLabel: Record<string, string> = {
+  critical: '严重',
+  warning: '警告',
+  info: '通知',
+}
+
+function severityToLevel(severity: string): 'critical' | 'warning' | 'info' {
+  if (severity === 'critical') return 'critical'
+  if (severity === 'warning') return 'warning'
+  return 'info'
+}
+
+function timeAgo(firedAt: string): string {
+  const now = new Date()
+  const fired = new Date(firedAt)
+  const diff = Math.floor((now.getTime() - fired.getTime()) / 1000)
+  if (diff < 60) return `${diff} 秒前`
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  return `${Math.floor(diff / 86400)} 天前`
+}
+
+async function fetchDashboard() {
+  try {
+    const res = await get('/dashboard')
+    if (res.code !== 0) return
+
+    const data = res.data as { stats: { total_assets: number; online_assets: number; fired_alerts: number; critical_alerts: number; warning_alerts: number }; metrics: any[]; alerts: any[] }
+
+    // Stats
+    stats.value = [
+      {
+        key: 'assets',
+        label: '资产总数',
+        value: data.stats.total_assets || 0,
+        unit: '台',
+        icon: '⬡',
+        accent: 'var(--accent-cyan)',
+        trend: 'stable',
+        trendValue: `${data.stats.online_assets || 0} 在线`,
+      },
+      {
+        key: 'online',
+        label: '在线资产',
+        value: data.stats.online_assets || 0,
+        unit: '台',
+        icon: '◈',
+        accent: 'var(--accent-teal)',
+        trend: (data.stats.online_assets || 0) === (data.stats.total_assets || 0) ? 'stable' : 'down',
+        trendValue: (data.stats.online_assets || 0) === (data.stats.total_assets || 0) ? '全部在线' : '部分离线',
+      },
+      {
+        key: 'alerts',
+        label: '活跃告警',
+        value: data.stats.fired_alerts || 0,
+        unit: '条',
+        icon: '▲',
+        accent: data.stats.critical_alerts > 0 ? 'var(--accent-red)' : 'var(--accent-amber)',
+        trend: data.stats.critical_alerts > 0 ? 'up' : 'stable',
+        trendValue: data.stats.critical_alerts > 0 ? `${data.stats.critical_alerts} 严重` : '无严重告警',
+      },
+      {
+        key: 'warnings',
+        label: '警告',
+        value: data.stats.warning_alerts || 0,
+        unit: '条',
+        icon: '◇',
+        accent: 'var(--accent-amber)',
+        trend: data.stats.warning_alerts > 0 ? 'up' : 'stable',
+        trendValue: data.stats.warning_alerts > 0 ? '需关注' : '正常',
+      },
+    ]
+
+    // Asset metrics
+    assetMetrics.value = (data.metrics || []).map((m: any) => ({
+      asset_id: m.asset_id,
+      asset_name: m.asset_name,
+      asset_ip: m.asset_ip,
+      cpu_usage: m.cpu_usage,
+      mem_usage: m.mem_usage,
+      disk_usage: m.disk_usage,
+    }))
+
+    // Alerts
+    alerts.value = (data.alerts || []).map((a: any) => ({
+      id: a.id,
+      level: severityToLevel(a.severity),
+      message: a.message,
+      source: `资产 #${a.asset_id || '?'}`,
+      time: a.fired_at ? timeAgo(a.fired_at) : '-',
+    }))
+
+    loading.value = false
+  } catch (e) {
+    console.error('Failed to fetch dashboard', e)
+    loading.value = false
+  }
+}
+
 onMounted(() => {
   currentTime.value = formatTime()
   timer = setInterval(() => {
     currentTime.value = formatTime()
     uptimeSeconds.value += 1
   }, 1000)
+
+  fetchDashboard()
+  // Refresh every 30s
+  setInterval(fetchDashboard, 30000)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-const stats = ref<StatCard[]>([
-  {
-    key: 'servers',
-    label: '服务器',
-    value: 128,
-    unit: '台',
-    icon: '⬡',
-    accent: 'var(--accent-cyan)',
-    trend: 'up',
-    trendValue: '+3',
-  },
-  {
-    key: 'switches',
-    label: '交换机',
-    value: 64,
-    unit: '台',
-    icon: '◈',
-    accent: 'var(--accent-teal)',
-    trend: 'stable',
-    trendValue: '0',
-  },
-  {
-    key: 'storage',
-    label: '存储集群',
-    value: 12,
-    unit: '套',
-    icon: '◎',
-    accent: 'var(--accent-amber)',
-    trend: 'up',
-    trendValue: '+1',
-  },
-  {
-    key: 'metrics',
-    label: '监控指标',
-    value: 2847,
-    unit: '项',
-    icon: '◇',
-    accent: 'var(--accent-emerald)',
-    trend: 'up',
-    trendValue: '+156',
-  },
-])
+function usageColor(val: number | null): string {
+  if (val === null) return 'var(--color-text-muted)'
+  if (val >= 95) return 'var(--accent-red)'
+  if (val >= 80) return 'var(--accent-amber)'
+  return 'var(--accent-emerald)'
+}
 
-const alerts = ref<AlertItem[]>([
-  { id: 1, level: 'critical', message: '生产数据库主节点 DB-Master-01 连接超时', source: 'db-cluster-prod', time: '2 分钟前' },
-  { id: 2, level: 'warning', message: '交换机 SW-Core-A3 端口利用率超过 85%', source: 'network-core', time: '8 分钟前' },
-  { id: 3, level: 'critical', message: '存储集群 NAS-03 磁盘阵列降级告警', source: 'storage-nas', time: '15 分钟前' },
-  { id: 4, level: 'warning', message: '应用服务器 APP-Web-12 内存使用率 92%', source: 'app-cluster', time: '22 分钟前' },
-  { id: 5, level: 'info', message: '备份任务 BK-Daily 完成耗时超出预期窗口', source: 'backup-scheduler', time: '45 分钟前' },
-  { id: 6, level: 'info', message: 'SSL 证书 itsm.example.com 将于 15 天后过期', source: 'cert-monitor', time: '1 小时前' },
-])
-
-const alertLevelLabel: Record<AlertItem['level'], string> = {
-  critical: '严重',
-  warning: '警告',
-  info: '通知',
+function usageBarColor(val: number | null): string {
+  if (val === null) return 'var(--color-text-muted)'
+  if (val >= 95) return 'var(--accent-red)'
+  if (val >= 80) return 'var(--accent-amber)'
+  if (val >= 60) return 'var(--accent-amber)'
+  return 'var(--accent-emerald)'
 }
 </script>
 
@@ -159,34 +236,38 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
             <span class="title-icon" style="color: var(--accent-emerald)">◉</span>
             资源健康概览
           </h2>
-          <div class="health-bars">
-            <div class="health-row">
-              <span class="health-label">CPU 使用率</span>
-              <div class="health-track">
-                <div class="health-fill health-fill--cpu" style="width: 67%"></div>
+          <div v-if="assetMetrics.length === 0" class="empty-state">
+            暂无资产监控数据
+          </div>
+          <div v-else class="health-sections">
+            <div v-for="am in assetMetrics" :key="am.asset_id" class="health-asset">
+              <div class="health-asset-header">
+                <span class="health-asset-name">{{ am.asset_name }}</span>
+                <span class="health-asset-ip">{{ am.asset_ip }}</span>
               </div>
-              <span class="health-value">67%</span>
-            </div>
-            <div class="health-row">
-              <span class="health-label">内存使用率</span>
-              <div class="health-track">
-                <div class="health-fill health-fill--mem" style="width: 74%"></div>
+              <div class="health-bars">
+                <div class="health-row">
+                  <span class="health-label">CPU</span>
+                  <div class="health-track">
+                    <div class="health-fill" :style="{ width: (am.cpu_usage || 0) + '%', background: usageBarColor(am.cpu_usage) }"></div>
+                  </div>
+                  <span class="health-value" :style="{ color: usageColor(am.cpu_usage) }">{{ am.cpu_usage !== null ? am.cpu_usage.toFixed(1) + '%' : '-' }}</span>
+                </div>
+                <div class="health-row">
+                  <span class="health-label">内存</span>
+                  <div class="health-track">
+                    <div class="health-fill" :style="{ width: (am.mem_usage || 0) + '%', background: usageBarColor(am.mem_usage) }"></div>
+                  </div>
+                  <span class="health-value" :style="{ color: usageColor(am.mem_usage) }">{{ am.mem_usage !== null ? am.mem_usage.toFixed(1) + '%' : '-' }}</span>
+                </div>
+                <div class="health-row">
+                  <span class="health-label">磁盘</span>
+                  <div class="health-track">
+                    <div class="health-fill" :style="{ width: (am.disk_usage || 0) + '%', background: usageBarColor(am.disk_usage) }"></div>
+                  </div>
+                  <span class="health-value" :style="{ color: usageColor(am.disk_usage) }">{{ am.disk_usage !== null ? am.disk_usage.toFixed(1) + '%' : '-' }}</span>
+                </div>
               </div>
-              <span class="health-value">74%</span>
-            </div>
-            <div class="health-row">
-              <span class="health-label">磁盘 I/O</span>
-              <div class="health-track">
-                <div class="health-fill health-fill--disk" style="width: 42%"></div>
-              </div>
-              <span class="health-value">42%</span>
-            </div>
-            <div class="health-row">
-              <span class="health-label">网络带宽</span>
-              <div class="health-track">
-                <div class="health-fill health-fill--net" style="width: 58%"></div>
-              </div>
-              <span class="health-value">58%</span>
             </div>
           </div>
         </article>
@@ -196,7 +277,10 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
             <span class="title-icon" style="color: var(--accent-red)">▲</span>
             最新告警
           </h2>
-          <ul class="alert-list">
+          <div v-if="alerts.length === 0" class="empty-state">
+            ✅ 暂无活跃告警，系统运行正常
+          </div>
+          <ul v-else class="alert-list">
             <li
               v-for="alert in alerts"
               :key="alert.id"
@@ -204,7 +288,7 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
               :class="`alert-item--${alert.level}`"
             >
               <span class="alert-level" :class="`alert-level--${alert.level}`">
-                {{ alertLevelLabel[alert.level] }}
+                {{ alertLevelLabel[alert.level] || alert.level }}
               </span>
               <div class="alert-content">
                 <span class="alert-message">{{ alert.message }}</span>
@@ -371,18 +455,18 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
 }
 
 .trend--up {
-  color: var(--accent-emerald);
-  background: rgba(45, 212, 160, 0.1);
-}
-
-.trend--down {
   color: var(--accent-red);
   background: rgba(240, 72, 72, 0.1);
 }
 
+.trend--down {
+  color: var(--accent-amber);
+  background: rgba(240, 160, 48, 0.1);
+}
+
 .trend--stable {
-  color: var(--color-text-muted);
-  background: rgba(77, 98, 130, 0.15);
+  color: var(--accent-emerald);
+  background: rgba(45, 212, 160, 0.1);
 }
 
 .stat-card__glow {
@@ -428,10 +512,42 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
 }
 
 /* ====== Health Bars ====== */
+.health-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.health-asset {
+  padding: var(--space-4);
+  background: var(--color-bg-deep);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.health-asset-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.health-asset-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.health-asset-ip {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
 .health-bars {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .health-row {
@@ -443,7 +559,7 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
 .health-label {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
-  width: 80px;
+  width: 36px;
   flex-shrink: 0;
   text-align: right;
 }
@@ -459,36 +575,22 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
 .health-fill {
   height: 100%;
   border-radius: var(--radius-sm);
-  transition: width var(--transition-base);
-}
-
-.health-fill--cpu {
-  background: linear-gradient(90deg, var(--accent-cyan), rgba(0, 212, 255, 0.6));
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
-}
-
-.health-fill--mem {
-  background: linear-gradient(90deg, var(--accent-teal), rgba(14, 165, 160, 0.6));
-  box-shadow: 0 0 8px rgba(14, 165, 160, 0.3);
-}
-
-.health-fill--disk {
-  background: linear-gradient(90deg, var(--accent-amber), rgba(240, 160, 48, 0.6));
-  box-shadow: 0 0 8px rgba(240, 160, 48, 0.3);
-}
-
-.health-fill--net {
-  background: linear-gradient(90deg, var(--accent-emerald), rgba(45, 212, 160, 0.6));
-  box-shadow: 0 0 8px rgba(45, 212, 160, 0.3);
+  transition: width 0.6s ease;
 }
 
 .health-value {
   font-family: var(--font-display);
   font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  width: 40px;
+  width: 52px;
   text-align: right;
   flex-shrink: 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-8) 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 /* ====== Alert List ====== */
@@ -614,7 +716,7 @@ const alertLevelLabel: Record<AlertItem['level'], string> = {
   }
 
   .health-label {
-    width: 64px;
+    width: 36px;
     font-size: 0.75rem;
   }
 

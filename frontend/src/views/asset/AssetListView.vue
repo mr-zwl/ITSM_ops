@@ -4,6 +4,7 @@ import { get, post, del } from '@/api/http'
 
 interface Asset {
   id: number
+  asset_type_id: number
   name: string
   ip: string
   type: string
@@ -28,7 +29,7 @@ const formError = ref('')
 const formData = ref({
   name: '',
   ip: '',
-  type: '',
+  asset_type_id: null as number | null,
   status: 'online',
   location: '',
 })
@@ -45,6 +46,11 @@ const statusColors: Record<string, string> = {
   offline: 'var(--color-text-muted)',
   maintenance: 'var(--accent-amber)',
   warning: 'var(--accent-red)',
+}
+
+function assetTypeName(id: number): string {
+  const found = assetTypes.value.find(at => at.id === id)
+  return found ? found.name : String(id)
 }
 
 async function fetchAssets(): Promise<void> {
@@ -74,7 +80,7 @@ async function fetchAssetTypes(): Promise<void> {
 }
 
 async function handleCreate(): Promise<void> {
-  if (!formData.value.name || !formData.value.ip || !formData.value.type) {
+  if (!formData.value.name || !formData.value.ip || !formData.value.asset_type_id) {
     formError.value = '请填写必填字段（名称、IP、类型）'
     return
   }
@@ -85,7 +91,7 @@ async function handleCreate(): Promise<void> {
   try {
     await post<Asset>('/assets', formData.value)
     showForm.value = false
-    formData.value = { name: '', ip: '', type: '', status: 'online', location: '' }
+    formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', location: '' }
     await fetchAssets()
   } catch (err: unknown) {
     if (err instanceof Error) {
@@ -115,7 +121,7 @@ function openForm(): void {
 function closeForm(): void {
   showForm.value = false
   formError.value = ''
-  formData.value = { name: '', ip: '', type: '', status: 'online', location: '' }
+  formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', location: '' }
 }
 
 onMounted(() => {
@@ -158,6 +164,7 @@ onMounted(() => {
       <table class="asset-table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>名称</th>
             <th>IP 地址</th>
             <th>类型</th>
@@ -172,13 +179,16 @@ onMounted(() => {
           </tr>
           <tr v-for="asset in assets" :key="asset.id">
             <td>
+              <code class="asset-id">{{ asset.id }}</code>
+            </td>
+            <td>
               <span class="asset-name">{{ asset.name }}</span>
             </td>
             <td>
               <code class="asset-ip">{{ asset.ip }}</code>
             </td>
             <td>
-              <span class="asset-type-badge">{{ asset.type }}</span>
+              <span class="asset-type-badge">{{ assetTypeName(asset.asset_type_id) }}</span>
             </td>
             <td>
               <span class="status-dot" :style="{ background: statusColors[asset.status] || 'var(--color-text-muted)' }"></span>
@@ -235,9 +245,9 @@ onMounted(() => {
               <label class="form-label">
                 资产类型 <span class="required">*</span>
               </label>
-              <select v-model="formData.type" class="form-input form-select" :disabled="formLoading">
+              <select v-model="formData.asset_type_id" class="form-input form-select" :disabled="formLoading">
                 <option value="" disabled>请选择类型</option>
-                <option v-for="at in assetTypes" :key="at.id" :value="at.name">{{ at.name }}</option>
+                <option v-for="at in assetTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
                 <option value="服务器">服务器</option>
                 <option value="交换机">交换机</option>
                 <option value="路由器">路由器</option>
@@ -460,6 +470,15 @@ onMounted(() => {
   padding: var(--space-10) var(--space-4);
   color: var(--color-text-muted);
   font-size: 0.85rem;
+}
+
+.asset-id {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.08);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
 }
 
 .asset-name {
