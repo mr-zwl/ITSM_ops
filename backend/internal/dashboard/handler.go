@@ -15,6 +15,7 @@ type DashboardStats struct {
 	FiredAlerts    int `json:"fired_alerts"`
 	CriticalAlerts int `json:"critical_alerts"`
 	WarningAlerts  int `json:"warning_alerts"`
+	TotalMetrics   int `json:"total_metrics"`
 }
 
 type LatestMetric struct {
@@ -37,9 +38,9 @@ type RecentAlert struct {
 }
 
 type DashboardResponse struct {
-	Stats   DashboardStats `json:"stats"`
-	Metrics []LatestMetric `json:"metrics"`
-	Alerts  []RecentAlert  `json:"alerts"`
+	Stats        DashboardStats `json:"stats"`
+	Metrics      []LatestMetric `json:"metrics"`
+	RecentAlerts []RecentAlert  `json:"recent_alerts"`
 }
 
 func RegisterRoutes(mux *http.ServeMux, database *sqlx.DB) {
@@ -50,17 +51,16 @@ func RegisterRoutes(mux *http.ServeMux, database *sqlx.DB) {
 func getDashboard(w http.ResponseWriter, r *http.Request) {
 	resp := DashboardResponse{}
 
-	// Single query for all stats
 	_ = db.QueryRowxContext(r.Context(), `
 		SELECT
 			(SELECT COUNT(*) FROM assets) as total_assets,
 			(SELECT COUNT(*) FROM assets WHERE status='online') as online_assets,
 			(SELECT COUNT(*) FROM alert_events WHERE status='fired') as fired_alerts,
 			(SELECT COUNT(*) FROM alert_events WHERE status='fired' AND severity='critical') as critical_alerts,
-			(SELECT COUNT(*) FROM alert_events WHERE status='fired' AND severity='warning') as warning_alerts
-	`).Scan(&resp.Stats.TotalAssets, &resp.Stats.OnlineAssets, &resp.Stats.FiredAlerts, &resp.Stats.CriticalAlerts, &resp.Stats.WarningAlerts)
+			(SELECT COUNT(*) FROM alert_events WHERE status='fired' AND severity='warning') as warning_alerts,
+			(SELECT COUNT(*) FROM metric_data) as total_metrics
+	`).Scan(&resp.Stats.TotalAssets, &resp.Stats.OnlineAssets, &resp.Stats.FiredAlerts, &resp.Stats.CriticalAlerts, &resp.Stats.WarningAlerts, &resp.Stats.TotalMetrics)
 
-	// Latest metrics per asset using simple join
 	type metricRow struct {
 		AssetID   uint64   `db:"asset_id"`
 		AssetName string   `db:"asset_name"`
@@ -81,6 +81,8 @@ func getDashboard(w http.ResponseWriter, r *http.Request) {
 		ORDER BY a.id
 	`); err == nil {
 		for _, mr := range mRows {
+			resp.Metrics = []LatestMetric{}
+		for _, mr := range mRows {
 			resp.Metrics = append(resp.Metrics, LatestMetric{
 				AssetID:   mr.AssetID,
 				AssetName: mr.AssetName,
@@ -92,8 +94,9 @@ func getDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Recent alerts
-	_ = db.SelectContext(r.Context(), &resp.Alerts, "SELECT id, asset_id, severity, message, current_val, status, fired_at FROM alert_events ORDER BY fired_at DESC LIMIT 20")
+	if err := db.SelectContext(r.Context(), &resp.RecentAlerts, "SELECT id, asset_id, severity, message, current_val, status, fired_at FROM alert_events ORDER BY fired_at DESC LIMIT 20"); err != nil {
+		resp.RecentAlerts = []RecentAlert{}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"code": 0, "data": resp, "message": "ok"})

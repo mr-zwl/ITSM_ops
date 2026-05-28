@@ -81,7 +81,6 @@ func ingest(w http.ResponseWriter, r *http.Request) {
 		}
 		ts := p.CollectedAt
 		if ts == "" {
-			ts = ""
 			_, err = tx.ExecContext(r.Context(),
 				"INSERT INTO metric_data (asset_id, metric_code, value, collected_at) VALUES (?, ?, ?, NOW())",
 				p.AssetID, p.MetricCode, p.Value)
@@ -114,17 +113,19 @@ func queryData(w http.ResponseWriter, r *http.Request) {
 		limit = "100"
 	}
 
-	query := "SELECT * FROM metric_data WHERE 1=1"
+	query := `SELECT md.id, md.asset_id, COALESCE(a.name,'') as asset_name, COALESCE(a.ip,'') as asset_ip,
+		md.metric_code, md.value, md.collected_at, md.created_at
+		FROM metric_data md LEFT JOIN assets a ON md.asset_id = a.id WHERE 1=1`
 	args := []any{}
 	if assetID != "" {
-		query += " AND asset_id = ?"
+		query += " AND md.asset_id = ?"
 		args = append(args, assetID)
 	}
 	if code != "" {
-		query += " AND metric_code = ?"
+		query += " AND md.metric_code = ?"
 		args = append(args, code)
 	}
-	query += " ORDER BY collected_at DESC LIMIT ?"
+	query += " ORDER BY md.collected_at DESC LIMIT ?"
 	args = append(args, limit)
 
 	var data []MetricData
