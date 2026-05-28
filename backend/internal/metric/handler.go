@@ -33,6 +33,8 @@ type MetricDef struct {
 type MetricData struct {
 	ID          uint64  `db:"id"           json:"id"`
 	AssetID     uint64  `db:"asset_id"     json:"asset_id"`
+	AssetName   string  `db:"asset_name"   json:"asset_name"`
+	AssetIP     string  `db:"asset_ip"     json:"asset_ip"`
 	MetricCode  string  `db:"metric_code"  json:"metric_code"`
 	Value       float64 `db:"value"        json:"value"`
 	CollectedAt string  `db:"collected_at" json:"collected_at"`

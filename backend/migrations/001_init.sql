@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS assets (
     model         VARCHAR(128) NOT NULL DEFAULT '',
     location      VARCHAR(255) NOT NULL DEFAULT '',
     status        VARCHAR(16)  NOT NULL DEFAULT 'online',
+    os_type       VARCHAR(16)  NOT NULL DEFAULT 'linux',
     tags          JSON NOT NULL DEFAULT (JSON_ARRAY()),
     extra         JSON NOT NULL DEFAULT (JSON_OBJECT()),
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

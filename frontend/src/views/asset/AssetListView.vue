@@ -26,11 +26,15 @@ const error = ref('')
 const showForm = ref(false)
 const formLoading = ref(false)
 const formError = ref('')
+const showInstall = ref(false)
+const installGuide = ref<{asset_id: number; asset_name: string; os_type: string; commands: Record<string, string>} | null>(null)
+const copiedKey = ref('')
 const formData = ref({
   name: '',
   ip: '',
   asset_type_id: null as number | null,
   status: 'online',
+  os_type: 'linux',
   location: '',
 })
 
@@ -89,9 +93,15 @@ async function handleCreate(): Promise<void> {
   formError.value = ''
 
   try {
-    await post<Asset>('/assets', formData.value)
+    const res = await post<Asset>('/assets', formData.value)
     showForm.value = false
-    formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', location: '' }
+    // Fetch install guide
+    try {
+      const guideRes = await get<any>(`/assets/${res.data.id}/install`)
+      installGuide.value = guideRes.data
+      showInstall.value = true
+    } catch { /* ignore */ }
+    formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', os_type: 'linux', location: '' }
     await fetchAssets()
   } catch (err: unknown) {
     if (err instanceof Error) {
@@ -118,10 +128,20 @@ function openForm(): void {
   formError.value = ''
 }
 
+function copyCommand(key: string): void {
+  if (!installGuide.value) return
+  const cmd = installGuide.value.commands[key]
+  if (cmd) {
+    navigator.clipboard.writeText(cmd)
+    copiedKey.value = key
+    setTimeout(() => { copiedKey.value = '' }, 2000)
+  }
+}
+
 function closeForm(): void {
   showForm.value = false
   formError.value = ''
-  formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', location: '' }
+  formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', os_type: 'linux', location: '' }
 }
 
 onMounted(() => {
@@ -267,6 +287,15 @@ onMounted(() => {
             </div>
 
             <div class="form-row">
+              <label class="form-label">操作系统</label>
+              <select v-model="formData.os_type" class="form-input form-select" :disabled="formLoading">
+                <option value="linux">Linux</option>
+                <option value="windows">Windows</option>
+                <option value="other">其他</option>
+              </select>
+            </div>
+
+            <div class="form-row">
               <label class="form-label">位置</label>
               <input
                 v-model="formData.location"
@@ -290,6 +319,42 @@ onMounted(() => {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </Teleport>
+    <!-- Install Guide Dialog -->
+    <Teleport to="body">
+      <div v-if="showInstall" class="modal-overlay" @click.self="showInstall = false">
+        <div class="modal-content" style="max-width: 640px;">
+          <header class="modal-header">
+            <h2 class="modal-title">安装监控插件</h2>
+            <button class="modal-close" @click="showInstall = false">&#10005;</button>
+          </header>
+
+          <div v-if="installGuide" class="install-guide">
+            <div class="install-info">
+              <span class="install-asset">资产: <strong>{{ installGuide.asset_name }}</strong> (ID: {{ installGuide.asset_id }})</span>
+              <span class="install-os">系统: <strong>{{ installGuide.os_type === 'windows' ? 'Windows' : 'Linux' }}</strong></span>
+            </div>
+
+            <div class="install-section">
+              <h3 class="install-section-title">一键安装命令</h3>
+              <div class="code-block">
+                <code>{{ installGuide.commands[installGuide.os_type] || installGuide.commands['linux'] }}</code>
+                <button class="copy-btn" @click="copyCommand(installGuide.os_type)">复制</button>
+              </div>
+            </div>
+
+            <div class="install-section">
+              <h3 class="install-section-title">手动安装</h3>
+              <div class="code-block code-block--manual">
+                <pre>{{ installGuide.commands[installGuide.os_type + '_manual'] || installGuide.commands['linux_manual'] }}</pre>
+                <button class="copy-btn" @click="copyCommand(installGuide.os_type + '_manual')">复制</button>
+              </div>
+            </div>
+
+            <p class="install-tip">请在目标服务器上以管理员权限执行以上命令</p>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -751,4 +816,90 @@ onMounted(() => {
     min-width: 600px;
   }
 }
+
+/* ====== Install Guide ====== */
+.install-guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.install-info {
+  display: flex;
+  gap: var(--space-4);
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.install-asset strong, .install-os strong {
+  color: var(--accent-cyan);
+}
+
+.install-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.install-section-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.code-block {
+  position: relative;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  padding-right: 60px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  color: var(--accent-emerald);
+  line-height: 1.6;
+  overflow-x: auto;
+  word-break: break-all;
+}
+
+.code-block--manual {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.code-block pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.copy-btn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 2px 8px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-cyan);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.copy-btn:hover {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: var(--accent-cyan);
+}
+
+.install-tip {
+  font-size: 0.72rem;
+  color: var(--accent-amber);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: rgba(240, 160, 48, 0.08);
+  border-radius: var(--radius-sm);
+}
+
 </style>

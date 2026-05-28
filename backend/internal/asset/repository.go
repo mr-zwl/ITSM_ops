@@ -18,6 +18,7 @@ type Asset struct {
 	Model        string `db:"model"         json:"model"`
 	Location     string `db:"location"      json:"location"`
 	Status       string `db:"status"        json:"status"`
+	OsType       string `db:"os_type"       json:"os_type"`
 	Tags         string `db:"tags"          json:"tags"`
 	Extra        string `db:"extra"         json:"extra"`
 	CreatedAt    string `db:"created_at"    json:"created_at"`
@@ -39,6 +40,7 @@ type CreateAssetInput struct {
 	Model        string `json:"model"`
 	Location     string `json:"location"`
 	Status       string `json:"status"`
+	OsType       string `json:"os_type"`
 }
 
 type UpdateAssetInput struct {
@@ -49,6 +51,7 @@ type UpdateAssetInput struct {
 	Model        *string `json:"model"`
 	Location     *string `json:"location"`
 	Status       *string `json:"status"`
+	OsType       *string `json:"os_type"`
 }
 
 type Repository struct {
@@ -79,9 +82,9 @@ func (r *Repository) GetAsset(ctx context.Context, id uint64) (*Asset, error) {
 
 func (r *Repository) CreateAsset(ctx context.Context, in CreateAssetInput) (uint64, error) {
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO assets (asset_type_id, name, ip, sn, manufacturer, model, location, status, tags, extra)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}')`,
-		in.AssetTypeID, in.Name, in.IP, in.SN, in.Manufacturer, in.Model, in.Location, in.Status)
+		`INSERT INTO assets (asset_type_id, name, ip, sn, manufacturer, model, location, status, os_type, tags, extra)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}')`,
+		in.AssetTypeID, in.Name, in.IP, in.SN, in.Manufacturer, in.Model, in.Location, in.Status, in.OsType)
 	if err != nil {
 		return 0, err
 	}
@@ -118,9 +121,12 @@ func (r *Repository) UpdateAsset(ctx context.Context, id uint64, in UpdateAssetI
 	if in.Status != nil {
 		a.Status = *in.Status
 	}
+	if in.OsType != nil {
+		a.OsType = *in.OsType
+	}
 	_, err = r.db.ExecContext(ctx,
-		`UPDATE assets SET name=?, ip=?, sn=?, manufacturer=?, model=?, location=?, status=?, updated_at=NOW() WHERE id=?`,
-		a.Name, a.IP, a.SN, a.Manufacturer, a.Model, a.Location, a.Status, id)
+		`UPDATE assets SET name=?, ip=?, sn=?, manufacturer=?, model=?, location=?, status=?, os_type=?, updated_at=NOW() WHERE id=?`,
+		a.Name, a.IP, a.SN, a.Manufacturer, a.Model, a.Location, a.Status, a.OsType, id)
 	return err
 }
 

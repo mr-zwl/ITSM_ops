@@ -11,6 +11,8 @@ interface MetricDef {
 
 interface MetricDataPoint {
   asset_id: number
+  asset_name: string
+  asset_ip: string
   metric_code: string
   value: number
   collected_at: string
@@ -18,6 +20,8 @@ interface MetricDataPoint {
 
 interface AssetMetrics {
   assetId: number
+  assetName: string
+  assetIp: string
   metrics: {
     code: string
     name: string
@@ -76,7 +80,7 @@ const groupedByAsset = computed<AssetMetrics[]>(() => {
       })
     }
 
-    result.push({ assetId, metrics })
+    result.push({ assetId, assetName: dataPoints.find(d => d.asset_name)?.asset_name || '', assetIp: dataPoints.find(d => d.asset_ip)?.asset_ip || '', metrics })
   }
 
   return result
@@ -160,7 +164,10 @@ onMounted(fetchData)
     <section v-else class="asset-grid">
       <article v-for="group in groupedByAsset" :key="group.assetId" class="asset-card">
         <div class="asset-card__header">
-          <span class="asset-id-badge">资产 #{{ group.assetId }}</span>
+          <div class="asset-id-badge">
+          <span class="asset-name-label">{{ group.assetName || ('资产 #' + group.assetId) }}</span>
+          <span class="asset-ip-label">{{ group.assetIp }}</span>
+        </div>
           <span class="metric-count">{{ group.metrics.length }} 项指标</span>
         </div>
 
@@ -329,11 +336,26 @@ onMounted(fetchData)
 }
 
 .asset-id-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.asset-name-label {
   font-family: var(--font-display);
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--accent-cyan);
   letter-spacing: 0.04em;
+}
+
+.asset-ip-label {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg-deep);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
 }
 
 .metric-count {

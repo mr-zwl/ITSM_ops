@@ -16,6 +16,7 @@ func RegisterRoutes(mux *http.ServeMux, r *Repository) {
 	mux.HandleFunc("PUT /api/v1/assets/{id}", updateAsset)
 	mux.HandleFunc("DELETE /api/v1/assets/{id}", deleteAsset)
 	mux.HandleFunc("GET /api/v1/asset-types", listTypes)
+	registerInstallRoute(mux)
 }
 
 func listAssets(w http.ResponseWriter, r *http.Request) {
