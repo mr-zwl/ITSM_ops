@@ -4,19 +4,34 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+
 )
 
 var repo *Repository
 
+type RouteRegistrar struct {
+	mux *http.ServeMux
+}
+
 func RegisterRoutes(mux *http.ServeMux, r *Repository) {
 	repo = r
-	mux.HandleFunc("GET /api/v1/assets", listAssets)
-	mux.HandleFunc("POST /api/v1/assets", createAsset)
-	mux.HandleFunc("GET /api/v1/assets/{id}", getAsset)
-	mux.HandleFunc("PUT /api/v1/assets/{id}", updateAsset)
-	mux.HandleFunc("DELETE /api/v1/assets/{id}", deleteAsset)
-	mux.HandleFunc("GET /api/v1/asset-types", listTypes)
-	registerInstallRoute(mux)
+	mux.HandleFunc("GET /api/v1/assets", authOnly(listAssets))
+	mux.HandleFunc("POST /api/v1/assets", authOnly(createAsset))
+	mux.HandleFunc("GET /api/v1/assets/{id}", authOnly(getAsset))
+	mux.HandleFunc("PUT /api/v1/assets/{id}", authOnly(updateAsset))
+	mux.HandleFunc("DELETE /api/v1/assets/{id}", authOnly(deleteAsset))
+	mux.HandleFunc("GET /api/v1/assets/{id}/install", authOnly(installGuide))
+	mux.HandleFunc("GET /api/v1/assets/{id}/rdp", authOnly(handleRDP))
+	mux.HandleFunc("GET /api/v1/asset-types", authOnly(listAssetTypes))
+	// SSH WebSocket - no auth middleware (handled via upgrade)
+	mux.HandleFunc("GET /api/v1/ssh", handleSSH)
+}
+
+func authOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Auth is handled by the auth middleware in router.go
+		next(w, r)
+	}
 }
 
 func listAssets(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +86,7 @@ func getAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a == nil {
-		respondErr(w, http.StatusNotFound, "not found")
+		respondErr(w, http.StatusNotFound, "asset not found")
 		return
 	}
 	respondOK(w, a)
@@ -89,11 +104,11 @@ func updateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := repo.UpdateAsset(r.Context(), id, in); err != nil {
-		respondErr(w, http.StatusNotFound, "not found")
+		respondErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a, _ := repo.GetAsset(r.Context(), id)
-	respondOK(w, a)
+	updated, _ := repo.GetAsset(r.Context(), id)
+	respondOK(w, updated)
 }
 
 func deleteAsset(w http.ResponseWriter, r *http.Request) {
@@ -106,10 +121,10 @@ func deleteAsset(w http.ResponseWriter, r *http.Request) {
 		respondErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	respondOK(w, map[string]string{"status": "deleted"})
+	respondOK(w, nil)
 }
 
-func listTypes(w http.ResponseWriter, r *http.Request) {
+func listAssetTypes(w http.ResponseWriter, r *http.Request) {
 	types, err := repo.ListTypes(r.Context())
 	if err != nil {
 		respondErr(w, http.StatusInternalServerError, err.Error())
@@ -119,7 +134,8 @@ func listTypes(w http.ResponseWriter, r *http.Request) {
 }
 
 func parseID(r *http.Request) (uint64, error) {
-	return strconv.ParseUint(r.PathValue("id"), 10, 64)
+	s := r.PathValue("id")
+	return strconv.ParseUint(s, 10, 64)
 }
 
 func respondOK(w http.ResponseWriter, data any) {

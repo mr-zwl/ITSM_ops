@@ -19,6 +19,11 @@ type Asset struct {
 	Location     string `db:"location"      json:"location"`
 	Status       string `db:"status"        json:"status"`
 	OsType       string `db:"os_type"       json:"os_type"`
+	SSHUser      string `db:"ssh_user"      json:"ssh_user"`
+	SSHPassword  string `db:"ssh_password"  json:"ssh_password"`
+	SSHPort      string `db:"ssh_port"      json:"ssh_port"`
+	RDPUser      string `db:"rdp_user"      json:"rdp_user"`
+	RDPPort      string `db:"rdp_port"      json:"rdp_port"`
 	Tags         string `db:"tags"          json:"tags"`
 	Extra        string `db:"extra"         json:"extra"`
 	CreatedAt    string `db:"created_at"    json:"created_at"`
@@ -41,6 +46,11 @@ type CreateAssetInput struct {
 	Location     string `json:"location"`
 	Status       string `json:"status"`
 	OsType       string `json:"os_type"`
+	SSHUser      string `json:"ssh_user"`
+	SSHPassword  string `json:"ssh_password"`
+	SSHPort      string `json:"ssh_port"`
+	RDPUser      string `json:"rdp_user"`
+	RDPPort      string `json:"rdp_port"`
 }
 
 type UpdateAssetInput struct {
@@ -52,6 +62,11 @@ type UpdateAssetInput struct {
 	Location     *string `json:"location"`
 	Status       *string `json:"status"`
 	OsType       *string `json:"os_type"`
+	SSHUser      *string `json:"ssh_user"`
+	SSHPassword  *string `json:"ssh_password"`
+	SSHPort      *string `json:"ssh_port"`
+	RDPUser      *string `json:"rdp_user"`
+	RDPPort      *string `json:"rdp_port"`
 }
 
 type Repository struct {
@@ -81,10 +96,17 @@ func (r *Repository) GetAsset(ctx context.Context, id uint64) (*Asset, error) {
 }
 
 func (r *Repository) CreateAsset(ctx context.Context, in CreateAssetInput) (uint64, error) {
+	if in.SSHPort == "" {
+		in.SSHPort = "22"
+	}
+	if in.RDPPort == "" {
+		in.RDPPort = "3389"
+	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO assets (asset_type_id, name, ip, sn, manufacturer, model, location, status, os_type, tags, extra)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}')`,
-		in.AssetTypeID, in.Name, in.IP, in.SN, in.Manufacturer, in.Model, in.Location, in.Status, in.OsType)
+		`INSERT INTO assets (asset_type_id, name, ip, sn, manufacturer, model, location, status, os_type, ssh_user, ssh_password, ssh_port, rdp_user, rdp_port, tags, extra)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', '{}')`,
+		in.AssetTypeID, in.Name, in.IP, in.SN, in.Manufacturer, in.Model, in.Location, in.Status, in.OsType,
+		in.SSHUser, in.SSHPassword, in.SSHPort, in.RDPUser, in.RDPPort)
 	if err != nil {
 		return 0, err
 	}
@@ -100,33 +122,23 @@ func (r *Repository) UpdateAsset(ctx context.Context, id uint64, in UpdateAssetI
 	if a == nil {
 		return sql.ErrNoRows
 	}
-	if in.Name != nil {
-		a.Name = *in.Name
-	}
-	if in.IP != nil {
-		a.IP = *in.IP
-	}
-	if in.SN != nil {
-		a.SN = *in.SN
-	}
-	if in.Manufacturer != nil {
-		a.Manufacturer = *in.Manufacturer
-	}
-	if in.Model != nil {
-		a.Model = *in.Model
-	}
-	if in.Location != nil {
-		a.Location = *in.Location
-	}
-	if in.Status != nil {
-		a.Status = *in.Status
-	}
-	if in.OsType != nil {
-		a.OsType = *in.OsType
-	}
+	if in.Name != nil { a.Name = *in.Name }
+	if in.IP != nil { a.IP = *in.IP }
+	if in.SN != nil { a.SN = *in.SN }
+	if in.Manufacturer != nil { a.Manufacturer = *in.Manufacturer }
+	if in.Model != nil { a.Model = *in.Model }
+	if in.Location != nil { a.Location = *in.Location }
+	if in.Status != nil { a.Status = *in.Status }
+	if in.OsType != nil { a.OsType = *in.OsType }
+	if in.SSHUser != nil { a.SSHUser = *in.SSHUser }
+	if in.SSHPassword != nil { a.SSHPassword = *in.SSHPassword }
+	if in.SSHPort != nil { a.SSHPort = *in.SSHPort }
+	if in.RDPUser != nil { a.RDPUser = *in.RDPUser }
+	if in.RDPPort != nil { a.RDPPort = *in.RDPPort }
 	_, err = r.db.ExecContext(ctx,
-		`UPDATE assets SET name=?, ip=?, sn=?, manufacturer=?, model=?, location=?, status=?, os_type=?, updated_at=NOW() WHERE id=?`,
-		a.Name, a.IP, a.SN, a.Manufacturer, a.Model, a.Location, a.Status, a.OsType, id)
+		`UPDATE assets SET name=?, ip=?, sn=?, manufacturer=?, model=?, location=?, status=?, os_type=?, ssh_user=?, ssh_password=?, ssh_port=?, rdp_user=?, rdp_port=?, updated_at=NOW() WHERE id=?`,
+		a.Name, a.IP, a.SN, a.Manufacturer, a.Model, a.Location, a.Status, a.OsType,
+		a.SSHUser, a.SSHPassword, a.SSHPort, a.RDPUser, a.RDPPort, id)
 	return err
 }
 

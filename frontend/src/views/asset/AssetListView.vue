@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { get, post, del } from '@/api/http'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
 
 interface Asset {
   id: number
@@ -10,6 +13,12 @@ interface Asset {
   type: string
   status: string
   location: string
+  os_type: string
+  ssh_user: string
+  ssh_password: string
+  ssh_port: string
+  rdp_user: string
+  rdp_port: string
 }
 
 interface AssetType {
@@ -36,7 +45,25 @@ const formData = ref({
   status: 'online',
   os_type: 'linux',
   location: '',
+  ssh_user: '',
+  ssh_password: '',
+  ssh_port: '22',
+  rdp_user: '',
+  rdp_port: '3389',
 })
+
+// SSH terminal state
+const showTerminal = ref(false)
+const terminalAsset = ref<Asset | null>(null)
+const terminalEl = ref<HTMLElement | null>(null)
+const termConnected = ref(false)
+const termConnecting = ref(false)
+const showCredForm = ref(false)
+const credForm = ref({ host: '', port: '22', user: '', password: '' })
+
+let term: Terminal | null = null
+let fitAddon: FitAddon | null = null
+let ws: WebSocket | null = null
 
 const statusLabels: Record<string, string> = {
   online: '在线',
@@ -101,7 +128,7 @@ async function handleCreate(): Promise<void> {
       installGuide.value = guideRes.data
       showInstall.value = true
     } catch { /* ignore */ }
-    formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', os_type: 'linux', location: '' }
+    formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', os_type: 'linux', location: '', ssh_user: '', ssh_password: '', ssh_port: '22', rdp_user: '', rdp_port: '3389' }
     await fetchAssets()
   } catch (err: unknown) {
     if (err instanceof Error) {
@@ -141,12 +168,197 @@ function copyCommand(key: string): void {
 function closeForm(): void {
   showForm.value = false
   formError.value = ''
-  formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', os_type: 'linux', location: '' }
+  formData.value = { name: '', ip: '', asset_type_id: null as number | null, status: 'online', os_type: 'linux', location: '', ssh_user: '', ssh_password: '', ssh_port: '22', rdp_user: '', rdp_port: '3389' }
+}
+
+// ====== Remote access ======
+
+function handleRemote(asset: Asset): void {
+  if (asset.os_type === 'windows') {
+    window.location.href = `http://CHANGE_ME_SERVER_IP:8080/api/v1/assets/${asset.id}/rdp`
+  } else {
+    openTerminal(asset)
+  }
+}
+
+function openTerminal(asset: Asset): void {
+  terminalAsset.value = asset
+  showTerminal.value = true
+  termConnected.value = false
+  termConnecting.value = false
+  showCredForm.value = false
+
+  // If asset has credentials, auto-connect
+  if (asset.ssh_user && asset.ssh_password) {
+    credForm.value = {
+      host: asset.ip,
+      port: asset.ssh_port || '22',
+      user: asset.ssh_user,
+      password: asset.ssh_password,
+    }
+    nextTick(() => connectSSH())
+  } else {
+    // Show credential form
+    showCredForm.value = true
+    credForm.value = {
+      host: asset.ip,
+      port: asset.ssh_port || '22',
+      user: '',
+      password: '',
+    }
+  }
+}
+
+function initTerminal(): void {
+  if (!terminalEl.value) return
+
+  term = new Terminal({
+    cursorBlink: true,
+    fontSize: 14,
+    fontFamily: '"SF Mono", "Cascadia Code", "Fira Code", monospace',
+    theme: {
+      background: '#060a12',
+      foreground: '#e8edf5',
+      cursor: '#00d4ff',
+      selectionBackground: 'rgba(0, 212, 255, 0.25)',
+      black: '#0b1120',
+      red: '#f04848',
+      green: '#2dd4a0',
+      yellow: '#f0a030',
+      blue: '#00d4ff',
+      magenta: '#c084fc',
+      cyan: '#0ea5a0',
+      white: '#e8edf5',
+      brightBlack: '#4d6282',
+      brightRed: '#f87171',
+      brightGreen: '#4ade80',
+      brightYellow: '#fbbf24',
+      brightBlue: '#38bdf8',
+      brightMagenta: '#d8b4fe',
+      brightCyan: '#22d3ee',
+      brightWhite: '#f1f5f9',
+    },
+    allowProposedApi: true,
+  })
+
+  fitAddon = new FitAddon()
+  term.loadAddon(fitAddon)
+  term.open(terminalEl.value)
+  fitAddon.fit()
+
+  term.onData((data: string) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(new TextEncoder().encode(data))
+    }
+  })
+
+  term.onResize(({ rows, cols }) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ resize: { rows, cols } }))
+    }
+  })
+
+  window.addEventListener('resize', handleResize)
+}
+
+function handleResize(): void {
+  if (fitAddon && term) {
+    fitAddon.fit()
+  }
+}
+
+function connectSSH(): void {
+  if (!terminalAsset.value) return
+
+  showCredForm.value = false
+  termConnecting.value = true
+  termConnected.value = false
+
+  // Init terminal if not yet
+  nextTick(() => {
+    if (!term) {
+      initTerminal()
+    }
+
+    const asset = terminalAsset.value!
+    const wsUrl = `ws://CHANGE_ME_SERVER_IP:8080/api/v1/ssh?asset_id=${asset.id}`
+
+    ws = new WebSocket(wsUrl)
+    ws.binaryType = 'arraybuffer'
+
+    ws.onopen = () => {
+      termConnecting.value = false
+      termConnected.value = true
+
+      // Send credentials as first message
+      const creds = JSON.stringify({
+        host: credForm.value.host || asset.ip,
+        port: parseInt(credForm.value.port || '22', 10),
+        user: credForm.value.user,
+        password: credForm.value.password,
+      })
+      ws!.send(creds)
+
+      // Fit after connection
+      nextTick(() => {
+        if (fitAddon && term) {
+          fitAddon.fit()
+        }
+      })
+    }
+
+    ws.onmessage = (event: MessageEvent) => {
+      if (!term) return
+      if (event.data instanceof ArrayBuffer) {
+        term.write(new Uint8Array(event.data))
+      } else {
+        term.write(event.data)
+      }
+    }
+
+    ws.onclose = () => {
+      termConnecting.value = false
+      termConnected.value = false
+      if (term) {
+        term.write('\r\n\x1b[33m--- 连接已断开 ---\x1b[0m\r\n')
+      }
+    }
+
+    ws.onerror = () => {
+      termConnecting.value = false
+      termConnected.value = false
+      if (term) {
+        term.write('\r\n\x1b[31m--- 连接失败 ---\x1b[0m\r\n')
+      }
+    }
+  })
+}
+
+function closeTerminal(): void {
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+  if (term) {
+    term.dispose()
+    term = null
+  }
+  fitAddon = null
+  window.removeEventListener('resize', handleResize)
+  showTerminal.value = false
+  terminalAsset.value = null
+  termConnected.value = false
+  termConnecting.value = false
+  showCredForm.value = false
 }
 
 onMounted(() => {
   fetchAssets()
   fetchAssetTypes()
+})
+
+onBeforeUnmount(() => {
+  closeTerminal()
 })
 </script>
 
@@ -195,7 +407,7 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr v-if="assets.length === 0">
-            <td colspan="6" class="empty-cell">暂无资产数据</td>
+            <td colspan="7" class="empty-cell">暂无资产数据</td>
           </tr>
           <tr v-for="asset in assets" :key="asset.id">
             <td>
@@ -218,7 +430,17 @@ onMounted(() => {
               <span class="asset-location">{{ asset.location || '—' }}</span>
             </td>
             <td>
-              <button class="btn-delete" @click="handleDelete(asset.id)" title="删除">✕</button>
+              <div class="action-btns">
+                <button
+                  class="btn-remote"
+                  @click="handleRemote(asset)"
+                  :title="asset.os_type === 'windows' ? 'RDP 远程桌面' : 'SSH 远程终端'"
+                >
+                  <span v-if="asset.os_type === 'windows'">⬤</span>
+                  <span v-else>⌨</span>
+                </button>
+                <button class="btn-delete" @click="handleDelete(asset.id)" title="删除">✕</button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -268,7 +490,6 @@ onMounted(() => {
               <select v-model="formData.asset_type_id" class="form-input form-select" :disabled="formLoading">
                 <option :value="0" disabled>请选择类型</option>
                 <option v-for="at in assetTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
-
               </select>
             </div>
 
@@ -302,6 +523,66 @@ onMounted(() => {
               />
             </div>
 
+            <!-- SSH credentials -->
+            <div class="form-section-title">SSH 连接凭证</div>
+            <div class="form-row-inline">
+              <div class="form-row form-row--flex">
+                <label class="form-label">SSH用户</label>
+                <input
+                  v-model="formData.ssh_user"
+                  type="text"
+                  class="form-input"
+                  placeholder="root"
+                  :disabled="formLoading"
+                />
+              </div>
+              <div class="form-row form-row--flex">
+                <label class="form-label">SSH端口</label>
+                <input
+                  v-model="formData.ssh_port"
+                  type="text"
+                  class="form-input"
+                  placeholder="22"
+                  :disabled="formLoading"
+                />
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="form-label">SSH密码</label>
+              <input
+                v-model="formData.ssh_password"
+                type="password"
+                class="form-input"
+                placeholder="可留空"
+                :disabled="formLoading"
+              />
+            </div>
+
+            <!-- RDP credentials -->
+            <div class="form-section-title">RDP 连接凭证</div>
+            <div class="form-row-inline">
+              <div class="form-row form-row--flex">
+                <label class="form-label">RDP用户</label>
+                <input
+                  v-model="formData.rdp_user"
+                  type="text"
+                  class="form-input"
+                  placeholder="Administrator"
+                  :disabled="formLoading"
+                />
+              </div>
+              <div class="form-row form-row--flex">
+                <label class="form-label">RDP端口</label>
+                <input
+                  v-model="formData.rdp_port"
+                  type="text"
+                  class="form-input"
+                  placeholder="3389"
+                  :disabled="formLoading"
+                />
+              </div>
+            </div>
+
             <div v-if="formError" class="form-error">
               <span class="error-icon">▲</span>
               {{ formError }}
@@ -318,6 +599,7 @@ onMounted(() => {
         </div>
       </div>
     </Teleport>
+
     <!-- Install Guide Dialog -->
     <Teleport to="body">
       <div v-if="showInstall" class="modal-overlay" @click.self="showInstall = false">
@@ -351,6 +633,52 @@ onMounted(() => {
 
             <p class="install-tip">请在目标服务器上以管理员权限执行以上命令</p>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- SSH Terminal Dialog -->
+    <Teleport to="body">
+      <div v-if="showTerminal" class="terminal-overlay">
+        <div class="terminal-dialog">
+          <header class="terminal-header">
+            <div class="terminal-header-left">
+              <span class="terminal-icon">⌨</span>
+              <span class="terminal-title">
+                SSH: {{ terminalAsset?.name }} ({{ terminalAsset?.ip }})
+              </span>
+              <span v-if="termConnecting" class="terminal-status terminal-status--connecting">连接中...</span>
+              <span v-else-if="termConnected" class="terminal-status terminal-status--connected">已连接</span>
+              <span v-else class="terminal-status terminal-status--disconnected">未连接</span>
+            </div>
+            <button class="terminal-close" @click="closeTerminal">✕</button>
+          </header>
+
+          <!-- Credential form (shown when no stored credentials) -->
+          <div v-if="showCredForm" class="cred-form">
+            <div class="cred-form-grid">
+              <div class="form-row">
+                <label class="form-label">主机</label>
+                <input v-model="credForm.host" type="text" class="form-input" placeholder="10.0.1.100" />
+              </div>
+              <div class="form-row">
+                <label class="form-label">端口</label>
+                <input v-model="credForm.port" type="text" class="form-input" placeholder="22" />
+              </div>
+              <div class="form-row">
+                <label class="form-label">用户名</label>
+                <input v-model="credForm.user" type="text" class="form-input" placeholder="root" />
+              </div>
+              <div class="form-row">
+                <label class="form-label">密码</label>
+                <input v-model="credForm.password" type="password" class="form-input" placeholder="输入密码" />
+              </div>
+            </div>
+            <button class="btn-submit" @click="connectSSH">连接</button>
+          </div>
+
+          <!-- Terminal container -->
+          <div ref="terminalEl" class="terminal-container"></div>
         </div>
       </div>
     </Teleport>
@@ -583,6 +911,30 @@ onMounted(() => {
   font-size: 0.8rem;
 }
 
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-remote {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--accent-cyan);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all var(--transition-fast);
+  line-height: 1;
+}
+
+.btn-remote:hover {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.1);
+}
+
 .btn-delete {
   padding: var(--space-1) var(--space-2);
   background: transparent;
@@ -662,12 +1014,34 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .form-row {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.form-row--flex {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-row-inline {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.form-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-teal);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .form-label {
@@ -898,4 +1272,148 @@ onMounted(() => {
   border-radius: var(--radius-sm);
 }
 
+/* ====== SSH Terminal ====== */
+.terminal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 18, 0.92);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: var(--space-6);
+}
+
+.terminal-dialog {
+  width: 100%;
+  max-width: 960px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 40px rgba(0, 212, 255, 0.08), 0 16px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.terminal-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.terminal-icon {
+  color: var(--accent-cyan);
+  font-size: 0.9rem;
+  filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.4));
+}
+
+.terminal-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.terminal-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.terminal-status--connecting {
+  color: var(--accent-amber);
+  background: rgba(240, 160, 48, 0.12);
+  animation: status-pulse 1.5s ease-in-out infinite;
+}
+
+.terminal-status--connected {
+  color: var(--accent-emerald);
+  background: rgba(45, 212, 160, 0.1);
+}
+
+.terminal-status--disconnected {
+  color: var(--color-text-muted);
+  background: rgba(77, 98, 130, 0.15);
+}
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.terminal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all var(--transition-fast);
+}
+
+.terminal-close:hover {
+  background: rgba(240, 72, 72, 0.08);
+  border-color: rgba(240, 72, 72, 0.2);
+  color: var(--accent-red);
+}
+
+.terminal-container {
+  flex: 1;
+  padding: var(--space-2);
+  background: var(--color-bg-deep);
+  overflow: hidden;
+}
+
+.terminal-container :deep(.xterm) {
+  height: 100%;
+}
+
+.terminal-container :deep(.xterm-viewport) {
+  overflow-y: auto !important;
+}
+
+/* Credential form inside terminal */
+.cred-form {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.cred-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 420px;
+}
+
+.cred-form .btn-submit {
+  margin-top: var(--space-2);
+}
 </style>
