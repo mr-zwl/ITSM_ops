@@ -28,6 +28,19 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+type changePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+type registerRequest struct {
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+}
+
 type ctxKey string
 
 const claimsKey ctxKey = "claims"
@@ -45,6 +58,8 @@ func RegisterRoutes(mux *http.ServeMux, db *sqlx.DB, secret string, expire time.
 
 	mux.HandleFunc("POST /api/v1/auth/login", login)
 	mux.HandleFunc("GET /api/v1/auth/me", requireAuth(me))
+	mux.HandleFunc("POST /api/v1/auth/change-password", requireAuth(changePassword))
+	mux.HandleFunc("POST /api/v1/auth/register", requireAuth(registerUser))
 }
 
 func AuthMiddleware(secret string) func(http.Handler) http.Handler {
@@ -53,9 +68,9 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 			path := r.URL.Path
 			if path == "/healthz" || path == "/readyz" ||
 				path == "/api/v1/auth/login" ||
-			path == "/api/v1/collect" ||
-			path == "/api/v1/ssh" ||
-			strings.HasSuffix(path, "/rdp") ||
+				path == "/api/v1/collect" ||
+				path == "/api/v1/ssh" ||
+				strings.HasSuffix(path, "/rdp") ||
 				!strings.HasPrefix(path, "/api/v1/") {
 				next.ServeHTTP(w, r)
 				return
@@ -113,6 +128,104 @@ func me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondOK(w, user)
+}
+
+func changePassword(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value(claimsKey).(*pkgauth.Claims)
+
+	var req changePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		respondErr(w, http.StatusBadRequest, "old_password and new_password required")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		respondErr(w, http.StatusBadRequest, "new password must be at least 6 characters")
+		return
+	}
+
+	var user User
+	if err := database.GetContext(r.Context(), &user, "SELECT * FROM users WHERE id = ?", claims.UserID); err != nil {
+		respondErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	if !pkgauth.CheckPassword(user.Password, req.OldPassword) {
+		respondErr(w, http.StatusBadRequest, "old password is incorrect")
+		return
+	}
+
+	newHash, err := pkgauth.HashPassword(req.NewPassword)
+	if err != nil {
+		respondErr(w, http.StatusInternalServerError, "password hash failed")
+		return
+	}
+
+	if _, err := database.ExecContext(r.Context(), "UPDATE users SET password = ? WHERE id = ?", newHash, claims.UserID); err != nil {
+		respondErr(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+
+	respondOK(w, map[string]string{"message": "password changed"})
+}
+
+func registerUser(w http.ResponseWriter, r *http.Request) {
+	var req registerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if req.Username == "" || req.Password == "" {
+		respondErr(w, http.StatusBadRequest, "username and password required")
+		return
+	}
+	if len(req.Username) < 3 {
+		respondErr(w, http.StatusBadRequest, "username must be at least 3 characters")
+		return
+	}
+	if len(req.Password) < 6 {
+		respondErr(w, http.StatusBadRequest, "password must be at least 6 characters")
+		return
+	}
+
+	var count int
+	if err := database.GetContext(r.Context(), &count, "SELECT COUNT(*) FROM users WHERE username = ?", req.Username); err != nil {
+		respondErr(w, http.StatusInternalServerError, "query failed")
+		return
+	}
+	if count > 0 {
+		respondErr(w, http.StatusConflict, "username already exists")
+		return
+	}
+
+	hash, err := pkgauth.HashPassword(req.Password)
+	if err != nil {
+		respondErr(w, http.StatusInternalServerError, "password hash failed")
+		return
+	}
+
+	displayName := req.DisplayName
+	if displayName == "" {
+		displayName = req.Username
+	}
+
+	result, err := database.ExecContext(r.Context(),
+		"INSERT INTO users (username, password, display_name, email, phone, status) VALUES (?, ?, ?, ?, ?, 1)",
+		req.Username, hash, displayName, req.Email, req.Phone)
+	if err != nil {
+		respondErr(w, http.StatusInternalServerError, "create user failed")
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	respondOK(w, map[string]any{
+		"id":       id,
+		"username": req.Username,
+		"message":  "user created",
+	})
 }
 
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
