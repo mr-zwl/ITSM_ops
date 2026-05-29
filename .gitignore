@@ -76,3 +76,6 @@ deploy/k8s/charts/**/charts/*.tgz
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+# Backend binary
+backend/itsm_ops
+*.exe
