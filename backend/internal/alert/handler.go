@@ -18,7 +18,8 @@ type AlertRule struct {
 	ConditionOp string  `db:"condition_op" json:"condition_op"`
 	Threshold   float64 `db:"threshold"    json:"threshold"`
 	Severity    string  `db:"severity"     json:"severity"`
-	DurationSec int     `db:"duration_sec" json:"duration_sec"`
+	DurationSec int     `db:"duration" json:"duration_sec"`
+	Extra       *string `db:"extra"        json:"extra"`
 	Enabled     int     `db:"enabled"      json:"enabled"`
 	CreatedAt   string  `db:"created_at"   json:"created_at"`
 	UpdatedAt   string  `db:"updated_at"   json:"updated_at"`
