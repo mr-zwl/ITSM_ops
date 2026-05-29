@@ -92,6 +92,18 @@ const groupedByAsset = computed<AssetMetrics[]>(() => {
   return result
 })
 
+// Search
+const searchQuery = ref('')
+
+const filteredGroupedAssets = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return groupedByAsset.value
+  return groupedByAsset.value.filter(g => {
+    return g.assetName.toLowerCase().includes(q)
+      || g.assetIp.toLowerCase().includes(q)
+  })
+})
+
 function metricColor(percentage: number): string {
   if (percentage >= 95) return 'var(--accent-red)'
   if (percentage >= 80) return 'var(--accent-amber)'
@@ -140,14 +152,25 @@ onMounted(fetchData)
         <h1 class="page-title">指标监控</h1>
         <p class="page-desc">实时监控资产运行指标</p>
       </div>
-      <button class="btn-secondary" @click="fetchData">🔄 刷新</button>
+      <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            v-model="searchQuery"
+            class="search-input"
+            type="text"
+            placeholder="搜索资产名称、IP..."
+          />
+          <span v-if="searchQuery" class="search-count">{{ filteredGroupedAssets.length }} / {{ groupedByAsset.length }}</span>
+          <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</button>
+        </div>
+        <button class="btn-secondary" @click="fetchData">🔄 刷新</button>
     </div>
 
     <div v-if="error" class="form-error">{{ error }}</div>
     <div v-if="loading" class="loading-hint">加载中...</div>
 
     <div v-else class="asset-metric-grid">
-      <div v-for="asset in groupedByAsset" :key="asset.assetId" class="metric-card">
+      <div v-for="asset in filteredGroupedAssets" :key="asset.assetId" class="metric-card">
         <div class="metric-card-header">
           <span class="metric-asset-name">💻 {{ asset.assetName }}</span>
           <span class="metric-asset-ip">{{ asset.assetIp }}</span>
@@ -169,7 +192,7 @@ onMounted(fetchData)
         </div>
       </div>
 
-      <div v-if="groupedByAsset.length === 0" class="empty-state">
+      <div v-if="filteredGroupedAssets.length === 0" class="empty-state">
         <span class="empty-icon">📊</span>
         <p>暂无指标数据</p>
       </div>
@@ -338,4 +361,72 @@ onMounted(fetchData)
   padding: var(--space-10);
   color: var(--color-text-muted);
 }
+
+/* ====== Search ====== */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-base);
+  border: 1.5px solid var(--color-border-subtle);
+  border-radius: 100px;
+  min-width: 260px;
+  transition: all var(--transition-fast);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.08);
+}
+
+.search-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  background: transparent;
+  font-family: var(--font-body);
+  min-width: 0;
+}
+
+.search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.search-count {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.search-clear:hover {
+  background: var(--accent-pink);
+  color: var(--accent-red);
+}
+
 </style>

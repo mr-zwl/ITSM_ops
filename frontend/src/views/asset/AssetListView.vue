@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { get, post, del } from '@/api/http'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -71,6 +71,20 @@ const statusLabels: Record<string, string> = {
   maintenance: '维护中',
   warning: '告警',
 }
+
+// Search
+const searchQuery = ref('')
+
+const filteredAssets = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return assets.value
+  return assets.value.filter(a => {
+    return a.name.toLowerCase().includes(q)
+      || a.ip.toLowerCase().includes(q)
+      || (a.location && a.location.toLowerCase().includes(q))
+      || (a.os_type && a.os_type.toLowerCase().includes(q))
+  })
+})
 
 // statusColors removed - using CSS classes instead
 
@@ -366,7 +380,19 @@ onBeforeUnmount(() => {
         <h1 class="page-title">资产管理</h1>
         <p class="page-desc">管理和监控所有 IT 资产</p>
       </div>
-      <button class="btn-primary" @click="openForm">＋ 新增资产</button>
+      <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            v-model="searchQuery"
+            class="search-input"
+            type="text"
+            placeholder="搜索资产名称、IP、机房位置..."
+            clearable
+          />
+          <span v-if="searchQuery" class="search-count">{{ filteredAssets.length }} / {{ assets.length }}</span>
+          <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</button>
+        </div>
+        <button class="btn-primary" @click="openForm">＋ 新增资产</button>
     </div>
 
     <!-- 错误提示 -->
@@ -377,7 +403,7 @@ onBeforeUnmount(() => {
 
     <!-- 资产卡片网格 -->
     <div v-else class="asset-grid">
-      <div v-for="asset in assets" :key="asset.id" class="asset-card">
+      <div v-for="asset in filteredAssets" :key="asset.id" class="asset-card">
         <div class="asset-card-header">
           <div class="asset-icon">{{ asset.os_type === 'windows' ? '🖥️' : '💻' }}</div>
           <div class="asset-main-info">
@@ -413,7 +439,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="assets.length === 0" class="empty-state">
+      <div v-if="filteredAssets.length === 0" class="empty-state">
         <span class="empty-icon">📦</span>
         <p>暂无资产，点击上方按钮添加</p>
       </div>
@@ -1067,4 +1093,72 @@ onBeforeUnmount(() => {
   padding: var(--space-10);
   color: var(--color-text-muted);
 }
+
+/* ====== Search ====== */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-base);
+  border: 1.5px solid var(--color-border-subtle);
+  border-radius: 100px;
+  min-width: 280px;
+  transition: all var(--transition-fast);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.08);
+}
+
+.search-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  background: transparent;
+  font-family: var(--font-body);
+  min-width: 0;
+}
+
+.search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.search-count {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.search-clear:hover {
+  background: var(--accent-pink);
+  color: var(--accent-red);
+}
+
 </style>
