@@ -1,0 +1,21 @@
+[Unit]
+Description=ITSM Ops Backend
+After=network.target mysql.service
+
+[Service]
+Type=simple
+ExecStart=/opt/itsm-ops-backend
+WorkingDirectory=/opt/ITSM_ops/backend
+Environment=DB_TYPE=mysql
+Environment=DB_HOST=127.0.0.1
+Environment=DB_PORT=3306
+Environment=DB_USER=itsm
+Environment=DB_PASSWORD=ITSM_ops@2026x
+Environment=DB_NAME=itsm_ops
+Environment=JWT_SECRET=xK9mR3vN7pQ2wJ5tL8yF4bH6cD0sA1eG
+Environment=LISTEN_ADDR=:8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

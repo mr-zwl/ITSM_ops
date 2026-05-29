@@ -1,0 +1,16 @@
+[Unit]
+Description=ITSM Ops Collector
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/itsm-collector
+WorkingDirectory=/opt/ITSM_ops/backend
+Environment=COLLECTOR_ASSET_ID=1
+Environment=COLLECTOR_SERVER_URL=http://127.0.0.1:8080
+Environment=COLLECTOR_INTERVAL=10s
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
