@@ -183,3 +183,33 @@ CREATE TABLE IF NOT EXISTS metric_data (
     INDEX idx_asset_metric (asset_id, metric_code),
     INDEX idx_collected (collected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Seed data
+INSERT INTO users (username, password, display_name, status) VALUES
+('admin', '28226046e4b58432d7f1a41a7b8da29d:a671f8e26c710f95ff26c75ad3e4376880e6a0e35eb75f377ef4e4d4fb8e02da', '管理员', 1);
+
+INSERT INTO asset_types (id, name) VALUES
+(1, '服务器'), (2, '网络设备'), (3, '存储设备'), (4, '安全设备');
+
+INSERT INTO metric_definitions (code, name, unit) VALUES
+('cpu_usage', 'CPU使用率', '%'),
+('mem_usage', '内存使用率', '%'),
+('disk_usage', '磁盘使用率', '%'),
+('load_avg_1m', '1分钟负载', ''),
+('net_in', '网络入流量', 'KB/s'),
+('net_out', '网络出流量', 'KB/s');
+
+INSERT INTO alert_rules (name, metric_code, condition_op, threshold, severity) VALUES
+('CPU使用率警告', 'cpu_usage', '>', 80, 'warning'),
+('CPU使用率严重', 'cpu_usage', '>', 95, 'critical'),
+('内存使用率警告', 'mem_usage', '>', 80, 'warning'),
+('内存使用率严重', 'mem_usage', '>', 95, 'critical'),
+('磁盘使用率警告', 'disk_usage', '>', 80, 'warning'),
+('磁盘使用率严重', 'disk_usage', '>', 95, 'critical');
+
+INSERT INTO assets (asset_type_id, name, ip, status, os_type, location, ssh_user, ssh_password, ssh_port) VALUES
+(1, 'ITSM-Server-Self', 'CHANGE_ME_SERVER_IP', 'online', 'linux', '京东云-北京机房', 'root', 'CHANGE_ME_SSH_PASSWORD', '22');
+
+INSERT INTO assets (asset_type_id, name, ip, status, os_type, location, rdp_user, rdp_port) VALUES
+(1, 'WIN-Server', 'CHANGE_ME_WINDOWS_IP', 'online', 'windows', '京东云', 'Administrator', '3389');
