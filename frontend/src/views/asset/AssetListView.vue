@@ -281,7 +281,8 @@ function connectSSH(): void {
     }
 
     const asset = terminalAsset.value!
-    const wsUrl = `ws://CHANGE_ME_SERVER_IP:8080/api/v1/ssh?asset_id=${asset.id}`
+    const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProto}//${location.host}/api/v1/ssh?asset_id=${asset.id}`
 
     ws = new WebSocket(wsUrl)
     ws.binaryType = 'arraybuffer'
