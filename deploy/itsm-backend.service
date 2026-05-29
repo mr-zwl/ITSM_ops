@@ -10,9 +10,9 @@ Environment=DB_TYPE=mysql
 Environment=DB_HOST=127.0.0.1
 Environment=DB_PORT=3306
 Environment=DB_USER=itsm
-Environment=DB_PASSWORD=ITSM_ops@2026x
+Environment=DB_PASSWORD=CHANGE_ME_PASSWORD
 Environment=DB_NAME=itsm_ops
-Environment=JWT_SECRET=xK9mR3vN7pQ2wJ5tL8yF4bH6cD0sA1eG
+Environment=JWT_SECRET=CHANGE_ME_JWT_SECRET
 Environment=LISTEN_ADDR=:8080
 Restart=always
 RestartSec=5
