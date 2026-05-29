@@ -48,7 +48,7 @@ onUnmounted(() => {
   <div class="main-layout">
     <aside class="sidebar" :class="{ 'sidebar--collapsed': sidebarCollapsed }">
       <div class="sidebar-header">
-        <div class="logo-mark">⚡</div>
+        <div class="logo-mark">📋</div>
         <transition name="fade">
           <div v-if="!sidebarCollapsed" class="sidebar-brand">
             <span class="brand-title">ITSM Ops</span>
@@ -58,28 +58,28 @@ onUnmounted(() => {
 
       <nav class="sidebar-nav">
         <router-link to="/dashboard" class="nav-item" active-class="nav-item--active">
-          <span class="nav-icon">◉</span>
+          <span class="nav-icon">📊</span>
           <transition name="fade">
             <span v-if="!sidebarCollapsed" class="nav-label">仪表盘</span>
           </transition>
         </router-link>
 
         <router-link to="/assets" class="nav-item" active-class="nav-item--active">
-          <span class="nav-icon">⬡</span>
+          <span class="nav-icon">💻</span>
           <transition name="fade">
             <span v-if="!sidebarCollapsed" class="nav-label">资产管理</span>
           </transition>
         </router-link>
 
         <router-link to="/metrics" class="nav-item" active-class="nav-item--active">
-          <span class="nav-icon">◈</span>
+          <span class="nav-icon">📈</span>
           <transition name="fade">
             <span v-if="!sidebarCollapsed" class="nav-label">指标监控</span>
           </transition>
         </router-link>
 
         <router-link to="/alerts" class="nav-item" active-class="nav-item--active">
-          <span class="nav-icon">▲</span>
+          <span class="nav-icon">🔔</span>
           <transition name="fade">
             <span v-if="!sidebarCollapsed" class="nav-label">告警事件</span>
           </transition>
@@ -88,7 +88,7 @@ onUnmounted(() => {
 
       <div class="sidebar-footer">
         <button class="nav-item nav-item--logout" @click="handleLogout">
-          <span class="nav-icon">⏻</span>
+          <span class="nav-icon">🚪</span>
           <transition name="fade">
             <span v-if="!sidebarCollapsed" class="nav-label">退出登录</span>
           </transition>
@@ -99,7 +99,7 @@ onUnmounted(() => {
     <div class="main-content">
       <header class="top-bar">
         <button class="collapse-btn" @click="toggleSidebar" :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'">
-          <span class="collapse-icon" :class="{ 'collapse-icon--flipped': sidebarCollapsed }">◅</span>
+          <span class="collapse-icon" :class="{ 'collapse-icon--flipped': sidebarCollapsed }">‹</span>
         </button>
 
         <div class="top-bar-spacer"></div>
@@ -124,13 +124,9 @@ onUnmounted(() => {
 .main-layout {
   display: flex;
   min-height: 100vh;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 255, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(46, 165, 160, 0.04) 0%, transparent 50%),
-    var(--color-bg-deep);
+  background: var(--color-bg-deep);
 }
 
-/* ====== Sidebar ====== */
 .sidebar {
   width: 220px;
   display: flex;
@@ -144,7 +140,7 @@ onUnmounted(() => {
 }
 
 .sidebar--collapsed {
-  width: 60px;
+  width: 64px;
 }
 
 .sidebar-header {
@@ -153,13 +149,12 @@ onUnmounted(() => {
   gap: var(--space-3);
   padding: var(--space-5) var(--space-4);
   border-bottom: 1px solid var(--color-border);
-  min-height: 56px;
+  min-height: 64px;
 }
 
 .logo-mark {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   line-height: 1;
-  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
   flex-shrink: 0;
 }
 
@@ -169,11 +164,10 @@ onUnmounted(() => {
 }
 
 .brand-title {
-  font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+  color: var(--accent-red);
 }
 
 .sidebar-nav {
@@ -181,18 +175,18 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-4) var(--space-2);
+  padding: var(--space-3) var(--space-3);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: all var(--transition-fast);
   cursor: pointer;
@@ -204,14 +198,14 @@ onUnmounted(() => {
 }
 
 .nav-item:hover {
-  background: rgba(0, 212, 255, 0.06);
+  background: var(--color-bg-elevated);
   color: var(--color-text-primary);
 }
 
 .nav-item--active {
-  background: rgba(0, 212, 255, 0.08);
-  color: var(--accent-cyan);
-  border-left: 2px solid var(--accent-cyan);
+  background: var(--accent-pink);
+  color: var(--accent-red);
+  font-weight: 600;
 }
 
 .nav-item--logout {
@@ -220,13 +214,13 @@ onUnmounted(() => {
 
 .nav-item--logout:hover {
   color: var(--accent-red);
-  background: rgba(240, 72, 72, 0.06);
+  background: var(--accent-pink);
 }
 
 .nav-icon {
-  font-size: 1rem;
+  font-size: 1.15rem;
   flex-shrink: 0;
-  width: 20px;
+  width: 24px;
   text-align: center;
 }
 
@@ -235,11 +229,10 @@ onUnmounted(() => {
 }
 
 .sidebar-footer {
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-3);
   border-top: 1px solid var(--color-border);
 }
 
-/* ====== Fade transition ====== */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity var(--transition-fast);
@@ -250,7 +243,6 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-/* ====== Top Bar ====== */
 .main-content {
   flex: 1;
   display: flex;
@@ -263,32 +255,33 @@ onUnmounted(() => {
   align-items: center;
   padding: var(--space-3) var(--space-6);
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(180deg, rgba(11, 17, 32, 0.95) 0%, rgba(11, 17, 32, 0.8) 100%);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 40;
-  min-height: 52px;
+  min-height: 56px;
 }
 
 .collapse-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-bg-surface);
+  background: var(--color-bg-base);
   color: var(--color-text-muted);
   cursor: pointer;
   transition: all var(--transition-fast);
-  font-size: 0.7rem;
+  font-size: 1.1rem;
+  font-weight: 300;
 }
 
 .collapse-btn:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
 }
 
 .collapse-icon {
@@ -311,10 +304,9 @@ onUnmounted(() => {
 }
 
 .top-time {
-  font-family: var(--font-display);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--color-text-muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .user-badge {
@@ -324,35 +316,31 @@ onUnmounted(() => {
 }
 
 .user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: var(--accent-pink);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-display);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: var(--accent-cyan);
+  color: var(--accent-red);
 }
 
 .user-name {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--color-text-secondary);
   font-weight: 500;
 }
 
-/* ====== Page Content ====== */
 .page-content {
   flex: 1;
-  padding: var(--space-8);
+  padding: var(--space-6);
   max-width: 1440px;
   width: 100%;
 }
 
-/* ====== Responsive ====== */
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;

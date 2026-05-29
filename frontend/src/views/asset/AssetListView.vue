@@ -36,7 +36,7 @@ const showForm = ref(false)
 const formLoading = ref(false)
 const formError = ref('')
 const showInstall = ref(false)
-const installGuide = ref<{asset_id: number; asset_name: string; os_type: string; commands: Record<string, string>} | null>(null)
+const installGuide = ref<{asset_id: number; asset_name: string; os_type: string; endpoint: string; commands: Record<string, string>} | null>(null)
 const copiedKey = ref('')
 const formData = ref({
   name: '',
@@ -72,12 +72,7 @@ const statusLabels: Record<string, string> = {
   warning: '告警',
 }
 
-const statusColors: Record<string, string> = {
-  online: 'var(--accent-emerald)',
-  offline: 'var(--color-text-muted)',
-  maintenance: 'var(--accent-amber)',
-  warning: 'var(--accent-red)',
-}
+// statusColors removed - using CSS classes instead
 
 function assetTypeName(id: number): string {
   const found = assetTypes.value.find(at => at.id === id)
@@ -365,324 +360,211 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="asset-page">
-    <header class="page-header">
-      <div class="page-header-left">
-        <h1 class="page-title">
-          <span class="title-icon">⬡</span>
-          资产管理
-        </h1>
-        <span class="asset-count">共 {{ assets.length }} 项资产</span>
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">资产管理</h1>
+        <p class="page-desc">管理和监控所有 IT 资产</p>
       </div>
-      <button class="btn-create" @click="openForm">
-        <span class="btn-icon">＋</span>
-        新增资产
-      </button>
-    </header>
-
-    <!-- Error state -->
-    <div v-if="error" class="error-banner">
-      <span class="error-icon">▲</span>
-      {{ error }}
-      <button class="retry-btn" @click="fetchAssets">重试</button>
+      <button class="btn-primary" @click="openForm">＋ 新增资产</button>
     </div>
 
-    <!-- Loading state -->
-    <div v-if="loading" class="loading-state">
-      <span class="loading-spinner"></span>
-      <span>加载中...</span>
+    <!-- 错误提示 -->
+    <div v-if="error" class="form-error">{{ error }}</div>
+
+    <!-- 加载中 -->
+    <div v-if="loading" class="loading-hint">加载中...</div>
+
+    <!-- 资产卡片网格 -->
+    <div v-else class="asset-grid">
+      <div v-for="asset in assets" :key="asset.id" class="asset-card">
+        <div class="asset-card-header">
+          <div class="asset-icon">{{ asset.os_type === 'windows' ? '🖥️' : '💻' }}</div>
+          <div class="asset-main-info">
+            <span class="asset-name">{{ asset.name }}</span>
+            <span class="asset-ip">{{ asset.ip }}</span>
+          </div>
+          <span class="status-badge" :class="`status-badge--${asset.status}`">{{ statusLabels[asset.status] || asset.status }}</span>
+        </div>
+
+        <div class="asset-card-body">
+          <div class="asset-meta">
+            <span class="meta-item">
+              <span class="meta-label">类型</span>
+              <span class="meta-value">{{ assetTypeName(asset.asset_type_id) }}</span>
+            </span>
+            <span class="meta-item">
+              <span class="meta-label">系统</span>
+              <span class="meta-value xhs-tag xhs-tag--blue">{{ asset.os_type || 'linux' }}</span>
+            </span>
+            <span class="meta-item" v-if="asset.location">
+              <span class="meta-label">位置</span>
+              <span class="meta-value">{{ asset.location }}</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="asset-card-actions">
+          <button class="btn-action btn-action--primary" @click="handleRemote(asset)">
+            {{ asset.os_type === 'windows' ? '🖥️ 远程桌面' : '⌨️ SSH' }}
+          </button>
+          <button class="btn-action btn-action--secondary" @click="showInstall = true; installGuide = null; get<any>(`/assets/${asset.id}/install`).then(r => { if(r.code===0) installGuide = r.data as any }).catch(() => {})">📋 安装</button>
+          <button class="btn-action btn-action--danger" @click="handleDelete(asset.id)">🗑️</button>
+        </div>
+      </div>
+
+      <div v-if="assets.length === 0" class="empty-state">
+        <span class="empty-icon">📦</span>
+        <p>暂无资产，点击上方按钮添加</p>
+      </div>
     </div>
 
-    <!-- Asset table -->
-    <div v-if="!loading && !error" class="table-container">
-      <table class="asset-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>名称</th>
-            <th>IP 地址</th>
-            <th>类型</th>
-            <th>状态</th>
-            <th>位置</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="assets.length === 0">
-            <td colspan="7" class="empty-cell">暂无资产数据</td>
-          </tr>
-          <tr v-for="asset in assets" :key="asset.id">
-            <td>
-              <code class="asset-id">{{ asset.id }}</code>
-            </td>
-            <td>
-              <span class="asset-name">{{ asset.name }}</span>
-            </td>
-            <td>
-              <code class="asset-ip">{{ asset.ip }}</code>
-            </td>
-            <td>
-              <span class="asset-type-badge">{{ assetTypeName(asset.asset_type_id) }}</span>
-            </td>
-            <td>
-              <span class="status-dot" :style="{ background: statusColors[asset.status] || 'var(--color-text-muted)' }"></span>
-              <span class="status-text">{{ statusLabels[asset.status] || asset.status }}</span>
-            </td>
-            <td>
-              <span class="asset-location">{{ asset.location || '—' }}</span>
-            </td>
-            <td>
-              <div class="action-btns">
-                <button
-                  class="btn-remote"
-                  @click="handleRemote(asset)"
-                  :title="asset.os_type === 'windows' ? 'RDP 远程桌面' : 'SSH 远程终端'"
-                >
-                  <span v-if="asset.os_type === 'windows'">⬤</span>
-                  <span v-else>⌨</span>
-                </button>
-                <button class="btn-delete" @click="handleDelete(asset.id)" title="删除">✕</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- 新增资产弹窗 -->
+    <div v-if="showForm" class="modal-overlay" @click.self="closeForm">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="modal-title">新增资产</h2>
+          <button class="modal-close" @click="closeForm">✕</button>
+        </div>
 
-    <!-- Create form modal -->
-    <Teleport to="body">
-      <div v-if="showForm" class="modal-overlay" @click.self="closeForm">
-        <div class="modal-content">
-          <header class="modal-header">
-            <h2 class="modal-title">新增资产</h2>
-            <button class="modal-close" @click="closeForm">✕</button>
-          </header>
+        <form class="modal-body" @submit.prevent="handleCreate">
+          <div v-if="formError" class="form-error">{{ formError }}</div>
 
-          <form class="modal-form" @submit.prevent="handleCreate">
-            <div class="form-row">
-              <label class="form-label">
-                资产名称 <span class="required">*</span>
-              </label>
-              <input
-                v-model="formData.name"
-                type="text"
-                class="form-input"
-                placeholder="例如：PROD-DB-Master-01"
-                :disabled="formLoading"
-              />
-            </div>
+          <div class="form-group">
+            <label class="form-label">名称 *</label>
+            <input v-model="formData.name" class="form-input" placeholder="如：Web-Server-01" />
+          </div>
 
-            <div class="form-row">
-              <label class="form-label">
-                IP 地址 <span class="required">*</span>
-              </label>
-              <input
-                v-model="formData.ip"
-                type="text"
-                class="form-input"
-                placeholder="例如：10.0.1.100"
-                :disabled="formLoading"
-              />
-            </div>
+          <div class="form-group">
+            <label class="form-label">IP 地址 *</label>
+            <input v-model="formData.ip" class="form-input" placeholder="如：192.168.1.100" />
+          </div>
 
-            <div class="form-row">
-              <label class="form-label">
-                资产类型 <span class="required">*</span>
-              </label>
-              <select v-model="formData.asset_type_id" class="form-input form-select" :disabled="formLoading">
-                <option :value="0" disabled>请选择类型</option>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">类型 *</label>
+              <select v-model="formData.asset_type_id" class="form-input">
+                <option :value="null" disabled>选择类型</option>
                 <option v-for="at in assetTypes" :key="at.id" :value="at.id">{{ at.name }}</option>
               </select>
             </div>
-
-            <div class="form-row">
-              <label class="form-label">状态</label>
-              <select v-model="formData.status" class="form-input form-select" :disabled="formLoading">
-                <option value="online">在线</option>
-                <option value="offline">离线</option>
-                <option value="maintenance">维护中</option>
-                <option value="warning">告警</option>
-              </select>
-            </div>
-
-            <div class="form-row">
+            <div class="form-group">
               <label class="form-label">操作系统</label>
-              <select v-model="formData.os_type" class="form-input form-select" :disabled="formLoading">
+              <select v-model="formData.os_type" class="form-input">
                 <option value="linux">Linux</option>
                 <option value="windows">Windows</option>
-                <option value="other">其他</option>
               </select>
             </div>
-
-            <div class="form-row">
-              <label class="form-label">位置</label>
-              <input
-                v-model="formData.location"
-                type="text"
-                class="form-input"
-                placeholder="例如：机房A-3层-机柜05"
-                :disabled="formLoading"
-              />
-            </div>
-
-            <!-- SSH credentials -->
-            <div class="form-section-title">SSH 连接凭证</div>
-            <div class="form-row-inline">
-              <div class="form-row form-row--flex">
-                <label class="form-label">SSH用户</label>
-                <input
-                  v-model="formData.ssh_user"
-                  type="text"
-                  class="form-input"
-                  placeholder="root"
-                  :disabled="formLoading"
-                />
-              </div>
-              <div class="form-row form-row--flex">
-                <label class="form-label">SSH端口</label>
-                <input
-                  v-model="formData.ssh_port"
-                  type="text"
-                  class="form-input"
-                  placeholder="22"
-                  :disabled="formLoading"
-                />
-              </div>
-            </div>
-            <div class="form-row">
-              <label class="form-label">SSH密码</label>
-              <input
-                v-model="formData.ssh_password"
-                type="password"
-                class="form-input"
-                placeholder="可留空"
-                :disabled="formLoading"
-              />
-            </div>
-
-            <!-- RDP credentials -->
-            <div class="form-section-title">RDP 连接凭证</div>
-            <div class="form-row-inline">
-              <div class="form-row form-row--flex">
-                <label class="form-label">RDP用户</label>
-                <input
-                  v-model="formData.rdp_user"
-                  type="text"
-                  class="form-input"
-                  placeholder="Administrator"
-                  :disabled="formLoading"
-                />
-              </div>
-              <div class="form-row form-row--flex">
-                <label class="form-label">RDP端口</label>
-                <input
-                  v-model="formData.rdp_port"
-                  type="text"
-                  class="form-input"
-                  placeholder="3389"
-                  :disabled="formLoading"
-                />
-              </div>
-            </div>
-
-            <div v-if="formError" class="form-error">
-              <span class="error-icon">▲</span>
-              {{ formError }}
-            </div>
-
-            <div class="form-actions">
-              <button type="button" class="btn-cancel" @click="closeForm" :disabled="formLoading">取消</button>
-              <button type="submit" class="btn-submit" :disabled="formLoading">
-                <span v-if="formLoading" class="btn-spinner"></span>
-                <span v-else>创建</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Install Guide Dialog -->
-    <Teleport to="body">
-      <div v-if="showInstall" class="modal-overlay" @click.self="showInstall = false">
-        <div class="modal-content" style="max-width: 640px;">
-          <header class="modal-header">
-            <h2 class="modal-title">安装监控插件</h2>
-            <button class="modal-close" @click="showInstall = false">&#10005;</button>
-          </header>
-
-          <div v-if="installGuide" class="install-guide">
-            <div class="install-info">
-              <span class="install-asset">资产: <strong>{{ installGuide.asset_name }}</strong> (ID: {{ installGuide.asset_id }})</span>
-              <span class="install-os">系统: <strong>{{ installGuide.os_type === 'windows' ? 'Windows' : 'Linux' }}</strong></span>
-            </div>
-
-            <div class="install-section">
-              <h3 class="install-section-title">一键安装命令</h3>
-              <div class="code-block">
-                <code>{{ installGuide.commands[installGuide.os_type] || installGuide.commands['linux'] }}</code>
-                <button class="copy-btn" @click="copyCommand(installGuide.os_type)">复制</button>
-              </div>
-            </div>
-
-            <div class="install-section">
-              <h3 class="install-section-title">手动安装</h3>
-              <div class="code-block code-block--manual">
-                <pre>{{ installGuide.commands[installGuide.os_type + '_manual'] || installGuide.commands['linux_manual'] }}</pre>
-                <button class="copy-btn" @click="copyCommand(installGuide.os_type + '_manual')">复制</button>
-              </div>
-            </div>
-
-            <p class="install-tip">请在目标服务器上以管理员权限执行以上命令</p>
           </div>
-        </div>
-      </div>
-    </Teleport>
 
-    <!-- SSH Terminal Dialog -->
-    <Teleport to="body">
-      <div v-if="showTerminal" class="terminal-overlay">
-        <div class="terminal-dialog">
-          <header class="terminal-header">
-            <div class="terminal-header-left">
-              <span class="terminal-icon">⌨</span>
-              <span class="terminal-title">
-                SSH: {{ terminalAsset?.name }} ({{ terminalAsset?.ip }})
-              </span>
-              <span v-if="termConnecting" class="terminal-status terminal-status--connecting">连接中...</span>
-              <span v-else-if="termConnected" class="terminal-status terminal-status--connected">已连接</span>
-              <span v-else class="terminal-status terminal-status--disconnected">未连接</span>
+          <div class="form-group">
+            <label class="form-label">位置</label>
+            <input v-model="formData.location" class="form-input" placeholder="如：北京机房" />
+          </div>
+
+          <div class="form-section-title">SSH 连接</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">用户名</label>
+              <input v-model="formData.ssh_user" class="form-input" placeholder="root" />
             </div>
-            <button class="terminal-close" @click="closeTerminal">✕</button>
-          </header>
+            <div class="form-group">
+              <label class="form-label">端口</label>
+              <input v-model="formData.ssh_port" class="form-input" placeholder="22" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">密码</label>
+            <input v-model="formData.ssh_password" type="password" class="form-input" placeholder="SSH 密码" />
+          </div>
 
-          <!-- Credential form (shown when no stored credentials) -->
-          <div v-if="showCredForm" class="cred-form">
-            <div class="cred-form-grid">
-              <div class="form-row">
-                <label class="form-label">主机</label>
-                <input v-model="credForm.host" type="text" class="form-input" placeholder="10.0.1.100" />
-              </div>
-              <div class="form-row">
-                <label class="form-label">端口</label>
-                <input v-model="credForm.port" type="text" class="form-input" placeholder="22" />
-              </div>
-              <div class="form-row">
+          <div class="form-section-title" v-if="formData.os_type === 'windows'">RDP 连接</div>
+          <template v-if="formData.os_type === 'windows'">
+            <div class="form-row">
+              <div class="form-group">
                 <label class="form-label">用户名</label>
-                <input v-model="credForm.user" type="text" class="form-input" placeholder="root" />
+                <input v-model="formData.rdp_user" class="form-input" placeholder="Administrator" />
               </div>
-              <div class="form-row">
-                <label class="form-label">密码</label>
-                <input v-model="credForm.password" type="password" class="form-input" placeholder="输入密码" />
+              <div class="form-group">
+                <label class="form-label">端口</label>
+                <input v-model="formData.rdp_port" class="form-input" placeholder="3389" />
               </div>
             </div>
-            <button class="btn-submit" @click="connectSSH">连接</button>
-          </div>
+          </template>
 
-          <!-- Terminal container -->
-          <div ref="terminalEl" class="terminal-container"></div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" @click="closeForm">取消</button>
+            <button type="submit" class="btn-primary" :disabled="formLoading">
+              {{ formLoading ? '创建中...' : '创建' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 安装指南弹窗 -->
+    <div v-if="showInstall && installGuide" class="modal-overlay" @click.self="showInstall = false">
+      <div class="modal-card modal-card--wide">
+        <div class="modal-header">
+          <h2 class="modal-title">📋 安装指南 - {{ installGuide.asset_name }}</h2>
+          <button class="modal-close" @click="showInstall = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="install-section">
+            <div class="install-label">Endpoint</div>
+            <div class="install-endpoint">{{ installGuide.endpoint }}</div>
+          </div>
+          <div v-for="(cmd, key) in installGuide.commands" :key="key" class="install-section">
+            <div class="install-label">{{ key === 'linux' ? '🚀 Linux 一键安装' : key === 'windows' ? '🚀 Windows 一键安装' : key === 'linux_manual' ? '🔧 Linux 手动安装' : '🔧 Windows 手动安装' }}</div>
+            <div class="install-cmd">
+              <pre>{{ cmd }}</pre>
+              <button class="btn-copy" @click="copyCommand(key)">{{ copiedKey === key ? '✓ 已复制' : '复制' }}</button>
+            </div>
+          </div>
         </div>
       </div>
-    </Teleport>
+    </div>
+
+    <!-- SSH 终端弹窗 -->
+    <div v-if="showTerminal" class="modal-overlay modal-overlay--dark" @click.self="closeTerminal">
+      <div class="modal-card modal-card--terminal">
+        <div class="modal-header modal-header--dark">
+          <h2 class="modal-title">
+            ⌨️ SSH - {{ terminalAsset?.name }}
+            <span v-if="termConnected" class="conn-status conn-status--on">已连接</span>
+            <span v-else-if="termConnecting" class="conn-status conn-status--connecting">连接中...</span>
+            <span v-else class="conn-status conn-status--off">未连接</span>
+          </h2>
+          <button class="modal-close" @click="closeTerminal">✕</button>
+        </div>
+
+        <!-- SSH 凭证表单 -->
+        <div v-if="showCredForm" class="cred-form">
+          <div class="form-group">
+            <label class="form-label">主机</label>
+            <input v-model="credForm.host" class="form-input" placeholder="目标主机 IP" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">端口</label>
+              <input v-model="credForm.port" class="form-input" placeholder="22" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">用户名</label>
+              <input v-model="credForm.user" class="form-input" placeholder="root" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">密码</label>
+            <input v-model="credForm.password" type="password" class="form-input" placeholder="SSH 密码" />
+          </div>
+          <button class="btn-primary" @click="connectSSH">连接</button>
+        </div>
+
+        <!-- 终端 -->
+        <div v-if="!showCredForm" class="terminal-container" ref="terminalEl"></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -690,274 +572,257 @@ onBeforeUnmount(() => {
 .asset-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.page-header-left {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
 }
 
 .page-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
-.title-icon {
-  color: var(--accent-cyan);
-  font-size: 1rem;
-}
-
-.asset-count {
-  font-size: 0.8rem;
+.page-desc {
+  font-size: 0.9rem;
   color: var(--color-text-muted);
+  margin-top: 2px;
 }
 
-.btn-create {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.12) 0%, rgba(0, 212, 255, 0.04) 100%);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+.btn-primary {
+  padding: var(--space-2) var(--space-5);
+  border: none;
   border-radius: var(--radius-md);
-  color: var(--accent-cyan);
+  background: var(--accent-red);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
   font-family: var(--font-body);
-  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #E6203C;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.25);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-base);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
+  font-family: var(--font-body);
 }
 
-.btn-create:hover {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(0, 212, 255, 0.08) 100%);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+.btn-secondary:hover {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-primary);
 }
 
-.btn-icon {
-  font-size: 1rem;
-  line-height: 1;
+/* ====== Asset Grid ====== */
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-4);
 }
 
-/* ====== Error / Loading ====== */
-.error-banner {
+.asset-card {
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.asset-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.asset-card-header {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  background: rgba(240, 72, 72, 0.06);
-  border: 1px solid rgba(240, 72, 72, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--accent-red);
-  font-size: 0.85rem;
-}
-
-.error-icon {
-  font-size: 0.7rem;
-  flex-shrink: 0;
-}
-
-.retry-btn {
-  margin-left: auto;
-  padding: var(--space-1) var(--space-3);
-  background: rgba(240, 72, 72, 0.1);
-  border: 1px solid rgba(240, 72, 72, 0.3);
-  border-radius: var(--radius-sm);
-  color: var(--accent-red);
-  font-size: 0.75rem;
-  cursor: pointer;
-  font-family: var(--font-body);
-  transition: background var(--transition-fast);
-}
-
-.retry-btn:hover {
-  background: rgba(240, 72, 72, 0.2);
-}
-
-.loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-12) 0;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-}
-
-.loading-spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(0, 212, 255, 0.2);
-  border-top-color: var(--accent-cyan);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ====== Table ====== */
-.table-container {
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
-}
-
-.asset-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.asset-table th {
-  padding: var(--space-3) var(--space-4);
-  text-align: left;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: var(--color-bg-elevated);
   border-bottom: 1px solid var(--color-border);
 }
 
-.asset-table td {
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border-subtle);
-  color: var(--color-text-secondary);
+.asset-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
-.asset-table tbody tr {
-  transition: background var(--transition-fast);
-}
-
-.asset-table tbody tr:hover {
-  background: rgba(0, 212, 255, 0.03);
-}
-
-.asset-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.empty-cell {
-  text-align: center;
-  padding: var(--space-10) var(--space-4);
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-}
-
-.asset-id {
-  font-family: var(--font-display);
-  font-size: 0.75rem;
-  color: var(--accent-amber);
-  background: rgba(245, 158, 11, 0.08);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+.asset-main-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .asset-name {
+  font-size: 0.95rem;
+  font-weight: 600;
   color: var(--color-text-primary);
-  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .asset-ip {
-  font-family: var(--font-display);
   font-size: 0.8rem;
-  color: var(--accent-cyan);
-  background: rgba(0, 212, 255, 0.06);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.asset-type-badge {
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  background: rgba(14, 165, 160, 0.1);
-  color: var(--accent-teal);
-  border: 1px solid rgba(14, 165, 160, 0.15);
-}
-
-.status-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-right: var(--space-2);
-  vertical-align: middle;
-}
-
-.status-text {
-  font-size: 0.8rem;
-  vertical-align: middle;
-}
-
-.asset-location {
-  font-size: 0.8rem;
-}
-
-.action-btns {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.btn-remote {
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--accent-cyan);
-  cursor: pointer;
-  font-size: 0.75rem;
-  transition: all var(--transition-fast);
-  line-height: 1;
-}
-
-.btn-remote:hover {
-  background: rgba(0, 212, 255, 0.08);
-  border-color: rgba(0, 212, 255, 0.2);
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.1);
-}
-
-.btn-delete {
-  padding: var(--space-1) var(--space-2);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.75rem;
-  transition: all var(--transition-fast);
 }
 
-.btn-delete:hover {
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.status-badge--online {
+  color: var(--accent-emerald);
+  background: var(--accent-emerald-light);
+}
+
+.status-badge--offline {
+  color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+}
+
+.status-badge--maintenance {
+  color: var(--accent-amber);
+  background: var(--accent-amber-light);
+}
+
+.status-badge--warning {
   color: var(--accent-red);
-  background: rgba(240, 72, 72, 0.08);
-  border-color: rgba(240, 72, 72, 0.2);
+  background: var(--accent-pink);
+}
+
+/* ====== Card Body ====== */
+.asset-card-body {
+  padding: var(--space-4) var(--space-5);
+}
+
+.asset-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.meta-value {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* ====== Card Actions ====== */
+.asset-card-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.btn-action {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-body);
+  text-align: center;
+}
+
+.btn-action--primary {
+  background: var(--accent-pink);
+  color: var(--accent-red);
+}
+
+.btn-action--primary:hover {
+  background: #FFE0E5;
+}
+
+.btn-action--secondary {
+  background: var(--color-bg-base);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.btn-action--secondary:hover {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-primary);
+}
+
+.btn-action--danger {
+  background: var(--color-bg-base);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  max-width: 44px;
+}
+
+.btn-action--danger:hover {
+  background: var(--accent-pink);
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+}
+
+/* ====== Empty State ====== */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: var(--space-3);
 }
 
 /* ====== Modal ====== */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(6, 10, 18, 0.8);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -966,14 +831,27 @@ onBeforeUnmount(() => {
   padding: var(--space-4);
 }
 
-.modal-content {
+.modal-overlay--dark {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modal-card {
+  background: var(--color-bg-base);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-elevated);
   width: 100%;
-  max-width: 480px;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), var(--shadow-glow-cyan);
-  overflow: hidden;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-card--wide {
+  max-width: 720px;
+}
+
+.modal-card--terminal {
+  max-width: 900px;
+  background: #1a1a2e;
 }
 
 .modal-header {
@@ -984,437 +862,209 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--color-border);
 }
 
+.modal-header--dark {
+  border-bottom-color: #2a2a4a;
+}
+
 .modal-title {
-  font-size: 0.95rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.modal-header--dark .modal-title {
+  color: #e8edf5;
 }
 
 .modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.85rem;
   transition: all var(--transition-fast);
 }
 
 .modal-close:hover {
-  background: rgba(240, 72, 72, 0.08);
+  background: var(--accent-pink);
   color: var(--accent-red);
 }
 
-.modal-form {
-  padding: var(--space-6);
+.modal-body {
+  padding: var(--space-5) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.form-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.form-row--flex {
-  flex: 1;
-  min-width: 0;
-}
-
-.form-row-inline {
-  display: flex;
   gap: var(--space-4);
 }
 
-.form-section-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--accent-teal);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border-subtle);
+.modal-footer {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2);
+}
+
+/* ====== Form ====== */
+.form-error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--accent-pink);
+  color: var(--accent-red);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
 }
 
 .form-label {
   font-size: 0.8rem;
+  font-weight: 600;
   color: var(--color-text-secondary);
-  font-weight: 500;
-}
-
-.required {
-  color: var(--accent-red);
 }
 
 .form-input {
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg-deep);
-  border: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
+  font-size: 0.9rem;
   color: var(--color-text-primary);
-  font-family: var(--font-body);
-  font-size: 0.85rem;
+  background: var(--color-bg-base);
+  transition: all var(--transition-fast);
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.form-input::placeholder {
-  color: var(--color-text-muted);
+  font-family: var(--font-body);
 }
 
 .form-input:focus {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.08);
 }
 
-.form-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.form-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238899b4' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: var(--space-8);
-}
-
-.form-select option {
-  background: var(--color-bg-deep);
-  color: var(--color-text-primary);
-}
-
-.form-error {
+.form-row {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: rgba(240, 72, 72, 0.08);
-  border: 1px solid rgba(240, 72, 72, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--accent-red);
-  font-size: 0.8rem;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
   gap: var(--space-3);
-  padding-top: var(--space-2);
 }
 
-.btn-cancel {
-  padding: var(--space-2) var(--space-5);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
-  font-family: var(--font-body);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.btn-cancel:hover {
-  border-color: var(--color-text-muted);
-  color: var(--color-text-primary);
-}
-
-.btn-cancel:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2) var(--space-5);
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(0, 212, 255, 0.05) 100%);
-  border: 1px solid var(--accent-cyan);
-  border-radius: var(--radius-md);
-  color: var(--accent-cyan);
-  font-family: var(--font-display);
-  font-size: 0.8rem;
+.form-section-title {
+  font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  min-width: 80px;
-}
-
-.btn-submit:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25) 0%, rgba(0, 212, 255, 0.1) 100%);
-  box-shadow: 0 0 16px rgba(0, 212, 255, 0.2);
-}
-
-.btn-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(0, 212, 255, 0.3);
-  border-top-color: var(--accent-cyan);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-/* ====== Responsive ====== */
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .table-container {
-    overflow-x: auto;
-  }
-
-  .asset-table {
-    min-width: 600px;
-  }
+  color: var(--color-text-primary);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 
 /* ====== Install Guide ====== */
-.install-guide {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.install-info {
-  display: flex;
-  gap: var(--space-4);
-  font-size: 0.82rem;
-  color: var(--color-text-secondary);
-}
-
-.install-asset strong, .install-os strong {
-  color: var(--accent-cyan);
-}
-
 .install-section {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.install-section-title {
-  font-size: 0.82rem;
+.install-label {
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
+  color: var(--color-text-secondary);
 }
 
-.code-block {
-  position: relative;
-  background: var(--color-bg-deep);
-  border: 1px solid var(--color-border-subtle);
+.install-endpoint {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-elevated);
   border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  padding-right: 60px;
-  font-family: var(--font-display);
-  font-size: 0.72rem;
-  color: var(--accent-emerald);
-  line-height: 1.6;
-  overflow-x: auto;
+  font-size: 0.85rem;
+  color: var(--accent-cyan);
   word-break: break-all;
 }
 
-.code-block--manual {
-  max-height: 260px;
-  overflow-y: auto;
+.install-cmd {
+  position: relative;
+  background: #1a1a2e;
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
-.code-block pre {
-  margin: 0;
+.install-cmd pre {
+  padding: var(--space-4);
+  font-size: 0.8rem;
+  color: #e8edf5;
+  overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
+  line-height: 1.6;
+  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
 }
 
-.copy-btn {
+.btn-copy {
   position: absolute;
   top: var(--space-2);
   right: var(--space-2);
-  padding: 2px 8px;
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  padding: var(--space-1) var(--space-3);
+  border: none;
   border-radius: var(--radius-sm);
-  color: var(--accent-cyan);
-  font-size: 0.65rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
-.copy-btn:hover {
-  background: rgba(0, 212, 255, 0.2);
-  border-color: var(--accent-cyan);
+.btn-copy:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
-.install-tip {
-  font-size: 0.72rem;
-  color: var(--accent-amber);
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  background: rgba(240, 160, 48, 0.08);
-  border-radius: var(--radius-sm);
-}
-
-/* ====== SSH Terminal ====== */
-.terminal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(6, 10, 18, 0.92);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 300;
-  padding: var(--space-6);
-}
-
-.terminal-dialog {
-  width: 100%;
-  max-width: 960px;
-  height: 80vh;
+/* ====== Terminal ====== */
+.cred-form {
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-deep);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 0 40px rgba(0, 212, 255, 0.08), 0 16px 60px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
-}
-
-.terminal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-5);
-  background: var(--color-bg-elevated);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.terminal-header-left {
-  display: flex;
-  align-items: center;
   gap: var(--space-3);
 }
 
-.terminal-icon {
-  color: var(--accent-cyan);
-  font-size: 0.9rem;
-  filter: drop-shadow(0 0 4px rgba(0, 212, 255, 0.4));
+.terminal-container {
+  height: 500px;
+  padding: var(--space-2);
 }
 
-.terminal-title {
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  letter-spacing: 0.02em;
-}
-
-.terminal-status {
+.conn-status {
   font-size: 0.7rem;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  border-radius: 100px;
 }
 
-.terminal-status--connecting {
-  color: var(--accent-amber);
-  background: rgba(240, 160, 48, 0.12);
-  animation: status-pulse 1.5s ease-in-out infinite;
-}
-
-.terminal-status--connected {
+.conn-status--on {
   color: var(--accent-emerald);
-  background: rgba(45, 212, 160, 0.1);
+  background: rgba(0, 200, 83, 0.15);
 }
 
-.terminal-status--disconnected {
+.conn-status--connecting {
+  color: var(--accent-amber);
+  background: rgba(255, 143, 31, 0.15);
+}
+
+.conn-status--off {
+  color: #888;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.loading-hint {
+  text-align: center;
+  padding: var(--space-10);
   color: var(--color-text-muted);
-  background: rgba(77, 98, 130, 0.15);
-}
-
-@keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.terminal-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all var(--transition-fast);
-}
-
-.terminal-close:hover {
-  background: rgba(240, 72, 72, 0.08);
-  border-color: rgba(240, 72, 72, 0.2);
-  color: var(--accent-red);
-}
-
-.terminal-container {
-  flex: 1;
-  padding: var(--space-2);
-  background: var(--color-bg-deep);
-  overflow: hidden;
-}
-
-.terminal-container :deep(.xterm) {
-  height: 100%;
-}
-
-.terminal-container :deep(.xterm-viewport) {
-  overflow-y: auto !important;
-}
-
-/* Credential form inside terminal */
-.cred-form {
-  padding: var(--space-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-}
-
-.cred-form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-  width: 100%;
-  max-width: 420px;
-}
-
-.cred-form .btn-submit {
-  margin-top: var(--space-2);
 }
 </style>

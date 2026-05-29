@@ -80,39 +80,28 @@ const groupedByAsset = computed<AssetMetrics[]>(() => {
       })
     }
 
-    result.push({ assetId, assetName: dataPoints.find(d => d.asset_name)?.asset_name || '', assetIp: dataPoints.find(d => d.asset_ip)?.asset_ip || '', metrics })
+    const first = dataPoints[0]!
+    result.push({
+      assetId,
+      assetName: first.asset_name || `资产 ${assetId}`,
+      assetIp: first.asset_ip || '-',
+      metrics,
+    })
   }
 
   return result
 })
 
-function gaugeColor(pct: number): string {
-  if (pct > 80) return 'var(--accent-red)'
-  if (pct > 60) return 'var(--accent-amber)'
+function metricColor(percentage: number): string {
+  if (percentage >= 95) return 'var(--accent-red)'
+  if (percentage >= 80) return 'var(--accent-amber)'
   return 'var(--accent-emerald)'
 }
 
-function gaugeGlow(pct: number): string {
-  if (pct > 80) return '0 0 10px rgba(240, 72, 72, 0.4)'
-  if (pct > 60) return '0 0 10px rgba(240, 160, 48, 0.4)'
-  return '0 0 10px rgba(45, 212, 160, 0.4)'
-}
-
-function gaugeGradient(pct: number): string {
-  if (pct > 80) return 'linear-gradient(90deg, var(--accent-amber), var(--accent-red))'
-  if (pct > 60) return 'linear-gradient(90deg, var(--accent-emerald), var(--accent-amber))'
-  return 'linear-gradient(90deg, var(--accent-cyan), var(--accent-emerald))'
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
+function metricBarClass(percentage: number): string {
+  if (percentage >= 95) return 'bar-fill--red'
+  if (percentage >= 80) return 'bar-fill--amber'
+  return 'bar-fill--green'
 }
 
 async function fetchData(): Promise<void> {
@@ -121,10 +110,10 @@ async function fetchData(): Promise<void> {
   try {
     const [defsRes, dataRes] = await Promise.all([
       get<MetricDef[]>('/metrics'),
-      get<MetricDataPoint[]>('/metric-data?limit=50'),
+      get<MetricDataPoint[]>('/metric-data?limit=500'),
     ])
-    metricDefs.value = defsRes.data
-    metricData.value = dataRes.data
+    metricDefs.value = defsRes.data || []
+    metricData.value = dataRes.data || []
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : '加载指标数据失败'
   } finally {
@@ -132,74 +121,59 @@ async function fetchData(): Promise<void> {
   }
 }
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 onMounted(fetchData)
 </script>
 
 <template>
   <div class="metric-page">
-    <header class="page-header">
-      <h1 class="page-title">
-        <span class="title-icon" style="color: var(--accent-cyan)">◈</span>
-        指标监控
-      </h1>
-      <span class="page-subtitle">实时资产指标概览</span>
-    </header>
-
-    <div v-if="loading" class="state-panel">
-      <div class="loading-ring"></div>
-      <span class="state-text">加载中...</span>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">指标监控</h1>
+        <p class="page-desc">实时监控资产运行指标</p>
+      </div>
+      <button class="btn-secondary" @click="fetchData">🔄 刷新</button>
     </div>
 
-    <div v-else-if="error" class="state-panel state-panel--error">
-      <span class="state-icon">⚠</span>
-      <span class="state-text">{{ error }}</span>
-      <button class="retry-btn" @click="fetchData">重试</button>
-    </div>
+    <div v-if="error" class="form-error">{{ error }}</div>
+    <div v-if="loading" class="loading-hint">加载中...</div>
 
-    <div v-else-if="groupedByAsset.length === 0" class="state-panel">
-      <span class="state-icon">◇</span>
-      <span class="state-text">暂无指标数据</span>
-    </div>
-
-    <section v-else class="asset-grid">
-      <article v-for="group in groupedByAsset" :key="group.assetId" class="asset-card">
-        <div class="asset-card__header">
-          <div class="asset-id-badge">
-          <span class="asset-name-label">{{ group.assetName || ('资产 #' + group.assetId) }}</span>
-          <span class="asset-ip-label">{{ group.assetIp }}</span>
-        </div>
-          <span class="metric-count">{{ group.metrics.length }} 项指标</span>
+    <div v-else class="asset-metric-grid">
+      <div v-for="asset in groupedByAsset" :key="asset.assetId" class="metric-card">
+        <div class="metric-card-header">
+          <span class="metric-asset-name">💻 {{ asset.assetName }}</span>
+          <span class="metric-asset-ip">{{ asset.assetIp }}</span>
         </div>
 
-        <div class="gauge-list">
-          <div v-for="m in group.metrics" :key="m.code" class="gauge-row">
-            <div class="gauge-row__info">
-              <span class="gauge-name">{{ m.name }}</span>
-              <span class="gauge-value" :style="{ color: gaugeColor(m.percentage) }">
-                {{ m.value.toFixed(1) }}<span class="gauge-unit">{{ m.unit }}</span>
+        <div class="metric-list">
+          <div v-for="m in asset.metrics" :key="m.code" class="metric-item">
+            <div class="metric-item-header">
+              <span class="metric-name">{{ m.name }}</span>
+              <span class="metric-value" :style="{ color: metricColor(m.percentage) }">
+                {{ m.value.toFixed(1) }}{{ m.unit }}
               </span>
             </div>
-            <div class="gauge-track">
-              <div
-                class="gauge-fill"
-                :style="{
-                  width: m.percentage + '%',
-                  background: gaugeGradient(m.percentage),
-                  boxShadow: gaugeGlow(m.percentage),
-                }"
-              ></div>
+            <div class="metric-bar-track">
+              <div class="metric-bar-fill" :class="metricBarClass(m.percentage)" :style="{ width: m.percentage + '%' }"></div>
             </div>
-            <span class="gauge-pct" :style="{ color: gaugeColor(m.percentage) }">
-              {{ Math.round(m.percentage) }}%
-            </span>
+            <span class="metric-time">{{ formatTime(m.collectedAt) }}</span>
           </div>
         </div>
+      </div>
 
-        <div class="asset-card__footer">
-          <span class="update-time">更新于 {{ formatTime(group.metrics[0]?.collectedAt ?? '') }}</span>
-        </div>
-      </article>
-    </section>
+      <div v-if="groupedByAsset.length === 0" class="empty-state">
+        <span class="empty-icon">📊</span>
+        <p>暂无指标数据</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -207,274 +181,161 @@ onMounted(fetchData)
 .metric-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-}
-
-/* ====== Page Header ====== */
-.page-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-}
-
-.page-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  letter-spacing: 0.02em;
-}
-
-.title-icon {
-  font-size: 0.9rem;
-}
-
-.page-subtitle {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-/* ====== State Panels ====== */
-.state-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-12) var(--space-6);
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-}
-
-.state-panel--error {
-  border-color: rgba(240, 72, 72, 0.3);
-}
-
-.state-icon {
-  font-size: 2rem;
-  filter: drop-shadow(0 0 8px currentColor);
-}
-
-.state-text {
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-}
-
-.loading-ring {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--accent-cyan);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.retry-btn {
-  padding: var(--space-2) var(--space-5);
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  border-radius: var(--radius-md);
-  color: var(--accent-cyan);
-  font-size: 0.8rem;
-  font-family: var(--font-body);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.retry-btn:hover {
-  background: rgba(0, 212, 255, 0.18);
-  border-color: var(--accent-cyan);
-}
-
-/* ====== Asset Grid ====== */
-.asset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: var(--space-5);
 }
 
-.asset-card {
-  background: var(--color-bg-surface);
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.page-desc {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.btn-secondary {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-base);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-body);
+}
+
+.btn-secondary:hover {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-primary);
+}
+
+.form-error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--accent-pink);
+  color: var(--accent-red);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.asset-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-4);
+}
+
+.metric-card {
+  background: var(--color-bg-base);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-5) var(--space-6);
   box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.metric-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.metric-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.metric-asset-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.metric-asset-ip {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.metric-list {
+  padding: var(--space-4) var(--space-5);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  transition: border-color var(--transition-fast);
-  position: relative;
-  overflow: hidden;
 }
 
-.asset-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-cyan), transparent);
-  opacity: 0.4;
-}
-
-.asset-card:hover {
-  border-color: var(--color-border-subtle);
-}
-
-.asset-card__header {
+.metric-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.asset-id-badge {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-2);
 }
 
-.asset-name-label {
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  letter-spacing: 0.04em;
-}
-
-.asset-ip-label {
-  font-family: var(--font-display);
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  background: var(--color-bg-deep);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.metric-count {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  background: var(--color-bg-deep);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-}
-
-/* ====== Gauge Rows ====== */
-.gauge-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.gauge-row {
+.metric-item-header {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-}
-
-.gauge-row__info {
-  display: flex;
-  align-items: baseline;
   justify-content: space-between;
-  min-width: 120px;
-  flex-shrink: 0;
 }
 
-.gauge-name {
-  font-size: 0.78rem;
+.metric-name {
+  font-size: 0.85rem;
   color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
-.gauge-value {
-  font-family: var(--font-display);
-  font-size: 0.8rem;
+.metric-value {
+  font-size: 0.9rem;
   font-weight: 700;
-  margin-left: auto;
 }
 
-.gauge-unit {
-  font-size: 0.65rem;
-  font-weight: 400;
-  opacity: 0.7;
-  margin-left: 2px;
-}
-
-.gauge-track {
-  flex: 1;
-  height: 10px;
-  background: var(--color-bg-deep);
-  border-radius: var(--radius-sm);
+.metric-bar-track {
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
   overflow: hidden;
-  position: relative;
 }
 
-.gauge-track::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent,
-    transparent 19%,
-    rgba(255, 255, 255, 0.02) 19%,
-    rgba(255, 255, 255, 0.02) 20%
-  );
-  pointer-events: none;
-}
-
-.gauge-fill {
+.metric-bar-fill {
   height: 100%;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   transition: width var(--transition-base);
-  position: relative;
 }
 
-.gauge-pct {
-  font-family: var(--font-display);
-  font-size: 0.75rem;
-  font-weight: 600;
-  width: 36px;
-  text-align: right;
-  flex-shrink: 0;
-}
+.bar-fill--green { background: var(--accent-emerald); }
+.bar-fill--amber { background: var(--accent-amber); }
+.bar-fill--red { background: var(--accent-red); }
 
-.asset-card__footer {
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.update-time {
-  font-size: 0.68rem;
+.metric-time {
+  font-size: 0.7rem;
   color: var(--color-text-muted);
-  letter-spacing: 0.02em;
 }
 
-/* ====== Responsive ====== */
-@media (max-width: 860px) {
-  .asset-grid {
-    grid-template-columns: 1fr;
-  }
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--color-text-muted);
 }
 
-@media (max-width: 480px) {
-  .gauge-row__info {
-    flex-direction: column;
-    min-width: 80px;
-    gap: 0;
-  }
+.empty-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: var(--space-3);
+}
 
-  .gauge-value {
-    margin-left: 0;
-  }
+.loading-hint {
+  text-align: center;
+  padding: var(--space-10);
+  color: var(--color-text-muted);
 }
 </style>

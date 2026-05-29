@@ -39,19 +39,38 @@ async function handleLogin(): Promise<void> {
 
 <template>
   <div class="login-page">
-    <div class="login-bg-grid"></div>
-    <div class="login-container">
-      <div class="login-brand">
-        <div class="brand-icon">⚡</div>
+    <div class="login-left">
+      <div class="login-illustration">
+        <div class="brand-logo">📋</div>
         <h1 class="brand-title">ITSM Ops</h1>
         <p class="brand-subtitle">智能运维监控平台</p>
+        <div class="brand-features">
+          <div class="feature-item">
+            <span class="feature-dot"></span>
+            <span>实时监控</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-dot"></span>
+            <span>智能告警</span>
+          </div>
+          <div class="feature-item">
+            <span class="feature-dot"></span>
+            <span>远程管理</span>
+          </div>
+        </div>
       </div>
+    </div>
 
-      <form class="login-form" @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label class="form-label" for="username">用户名</label>
-          <div class="input-wrapper">
-            <span class="input-icon">⬡</span>
+    <div class="login-right">
+      <div class="login-card">
+        <h2 class="login-title">欢迎回来</h2>
+        <p class="login-desc">登录以继续使用运维监控平台</p>
+
+        <form class="login-form" @submit.prevent="handleLogin">
+          <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
+
+          <div class="form-group">
+            <label class="form-label" for="username">用户名</label>
             <input
               id="username"
               v-model="username"
@@ -62,12 +81,9 @@ async function handleLogin(): Promise<void> {
               :disabled="loading"
             />
           </div>
-        </div>
 
-        <div class="form-group">
-          <label class="form-label" for="password">密码</label>
-          <div class="input-wrapper">
-            <span class="input-icon">◈</span>
+          <div class="form-group">
+            <label class="form-label" for="password">密码</label>
             <input
               id="password"
               v-model="password"
@@ -78,105 +94,146 @@ async function handleLogin(): Promise<void> {
               :disabled="loading"
             />
           </div>
-        </div>
 
-        <div v-if="errorMsg" class="form-error">
-          <span class="error-icon">▲</span>
-          {{ errorMsg }}
-        </div>
+          <button type="submit" class="login-btn" :disabled="loading">
+            <span v-if="loading" class="btn-loading"></span>
+            <span v-else>登 录</span>
+          </button>
+        </form>
 
-        <button type="submit" class="login-btn" :disabled="loading">
-          <span v-if="loading" class="btn-spinner"></span>
-          <span v-else>登 录</span>
-        </button>
-      </form>
-
-      <footer class="login-footer">
-        <span>ITSM Ops v0.1.0</span>
-      </footer>
+        <p class="login-footer">ITSM Ops © 2026</p>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .login-page {
+  display: flex;
   min-height: 100vh;
+  background: var(--color-bg-base);
+}
+
+.login-left {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 255, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(46, 165, 160, 0.05) 0%, transparent 50%),
-    var(--color-bg-deep);
+  background: linear-gradient(135deg, #FF2442 0%, #FF6B81 50%, #FFB3C1 100%);
   position: relative;
   overflow: hidden;
 }
 
-.login-bg-grid {
+.login-left::before {
+  content: '';
   position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 20%, transparent 70%);
-  pointer-events: none;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  top: -100px;
+  right: -100px;
 }
 
-.login-container {
-  width: 100%;
-  max-width: 400px;
-  padding: var(--space-10);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
+.login-left::after {
+  content: '';
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  bottom: -50px;
+  left: -50px;
+}
+
+.login-illustration {
+  text-align: center;
+  color: white;
   position: relative;
   z-index: 1;
 }
 
-.login-brand {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.brand-icon {
-  font-size: 2.5rem;
-  line-height: 1;
-  filter: drop-shadow(0 0 16px rgba(0, 212, 255, 0.5));
-  animation: brand-glow 3s ease-in-out infinite;
-}
-
-@keyframes brand-glow {
-  0%, 100% { filter: drop-shadow(0 0 16px rgba(0, 212, 255, 0.5)); }
-  50% { filter: drop-shadow(0 0 28px rgba(0, 212, 255, 0.8)); }
+.brand-logo {
+  font-size: 4rem;
+  margin-bottom: var(--space-5);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
 }
 
 .brand-title {
-  font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 2.5rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--color-text-primary);
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-3);
 }
 
 .brand-subtitle {
-  font-size: 0.85rem;
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin-bottom: var(--space-10);
+}
+
+.brand-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.feature-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
+}
+
+.login-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  background: var(--color-bg-base);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.login-desc {
+  font-size: 0.9rem;
   color: var(--color-text-muted);
-  letter-spacing: 0.06em;
+  margin-bottom: var(--space-8);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-8) var(--space-6);
-  box-shadow: var(--shadow-card), var(--shadow-glow-cyan);
+}
+
+.form-error {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--accent-pink);
+  color: var(--accent-red);
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .form-group {
@@ -186,47 +243,30 @@ async function handleLogin(): Promise<void> {
 }
 
 .form-label {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--color-text-secondary);
-  letter-spacing: 0.04em;
-  font-weight: 500;
-}
-
-.input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  background: var(--color-bg-deep);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.input-wrapper:focus-within {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
-}
-
-.input-icon {
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
 }
 
 .form-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
+  padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
   color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  transition: all var(--transition-fast);
+  outline: none;
   font-family: var(--font-body);
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
 .form-input::placeholder {
   color: var(--color-text-muted);
+}
+
+.form-input:focus {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 3px rgba(255, 36, 66, 0.1);
 }
 
 .form-input:disabled {
@@ -234,60 +274,41 @@ async function handleLogin(): Promise<void> {
   cursor: not-allowed;
 }
 
-.form-error {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: rgba(240, 72, 72, 0.08);
-  border: 1px solid rgba(240, 72, 72, 0.2);
-  border-radius: var(--radius-md);
-  color: var(--accent-red);
-  font-size: 0.8rem;
-}
-
-.error-icon {
-  font-size: 0.7rem;
-  flex-shrink: 0;
-}
-
 .login-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(0, 212, 255, 0.05) 100%);
-  border: 1px solid var(--accent-cyan);
+  padding: var(--space-3) var(--space-6);
+  border: none;
   border-radius: var(--radius-md);
-  color: var(--accent-cyan);
-  font-family: var(--font-display);
-  font-size: 0.9rem;
+  background: var(--accent-red);
+  color: white;
+  font-size: 1rem;
   font-weight: 600;
-  letter-spacing: 0.15em;
   cursor: pointer;
   transition: all var(--transition-fast);
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  margin-top: var(--space-2);
 }
 
 .login-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25) 0%, rgba(0, 212, 255, 0.1) 100%);
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+  background: #E6203C;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 36, 66, 0.3);
 }
 
 .login-btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: translateY(0);
 }
 
 .login-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.7;
   cursor: not-allowed;
 }
 
-.btn-spinner {
+.btn-loading {
+  display: inline-block;
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(0, 212, 255, 0.3);
-  border-top-color: var(--accent-cyan);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -297,22 +318,19 @@ async function handleLogin(): Promise<void> {
 }
 
 .login-footer {
+  margin-top: var(--space-10);
   text-align: center;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 
-@media (max-width: 480px) {
-  .login-container {
-    padding: var(--space-6) var(--space-4);
+@media (max-width: 768px) {
+  .login-left {
+    display: none;
   }
 
-  .login-form {
-    padding: var(--space-6) var(--space-4);
-  }
-
-  .brand-title {
-    font-size: 1.5rem;
+  .login-right {
+    padding: var(--space-6);
   }
 }
 </style>
