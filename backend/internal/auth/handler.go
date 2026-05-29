@@ -55,6 +55,7 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 				path == "/api/v1/auth/login" ||
 			path == "/api/v1/collect" ||
 			path == "/api/v1/ssh" ||
+			strings.HasSuffix(path, "/rdp") ||
 				!strings.HasPrefix(path, "/api/v1/") {
 				next.ServeHTTP(w, r)
 				return

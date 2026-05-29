@@ -175,7 +175,7 @@ function closeForm(): void {
 
 function handleRemote(asset: Asset): void {
   if (asset.os_type === 'windows') {
-    window.location.href = `http://CHANGE_ME_SERVER_IP:8080/api/v1/assets/${asset.id}/rdp`
+    window.location.href = `/api/v1/assets/${asset.id}/rdp`
   } else {
     openTerminal(asset)
   }
